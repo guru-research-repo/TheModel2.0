@@ -2,26 +2,30 @@ import os
 from pathlib import Path
 from PIL import Image
 from torch.utils.data import Dataset
+from transformations import *
+import torchvision.transforms.functional as TF
 
-def load_dataset(dataset, identity=4, task="train"):
+def load_dataset(dataset, identity=4, task="train", transform=None):
     if dataset == "celeb":
-        ds = CelebAFaceIDDataset(root_dir="data", split=task)
+        ds = CelebAFaceIDDataset(root_dir="data", split=task, transform=transform)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task)
+        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, transform=transform)
     return ds
 
 class CelebAFaceIDDataset(Dataset):
-    def __init__(self, root_dir: str = "data", split: str = "train"):
+    def __init__(self, root_dir: str = "data", split: str = "train", transform=None):
         """
         Args:
             root_dir (str): path to the folder containing
                 "CelebA_HQ_facial_identity_dataset" (default=".")
             split (str): "train" or "test"
+            transform (nn.Sequential): transformations to apply
         """
         self.samples = []
         root_path  = Path(root_dir)
         dataset_dir = root_path / "CelebA_HQ_facial_identity_dataset"
         split_dir   = dataset_dir / split
+        self.transform = transform
 
         if not split_dir.is_dir():
             raise FileNotFoundError(f"Could not find split directory: {split_dir!r}")
@@ -46,15 +50,23 @@ class CelebAFaceIDDataset(Dataset):
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
-        return img, label
+
+        if self.transform:
+            crops = self.transform(img) # Transformation pipeline
+        else:
+            #crops = [img]
+            crops = [TF.to_tensor(img)]
+
+        return crops, label
 
 class CelebrityFacesDataset(Dataset):
-    def __init__(self, root_dir: str, num_identities: int, split: str):
+    def __init__(self, root_dir: str, num_identities: int, split: str, transform=None):
         """
         Args:
             root_dir (str): path to "/dataset"
             num_identities (int): 4, 8, …, 128
             split (str): one of "train", "valid", "test"
+            transform (nn.Sequential): transformations to apply
         """
         # build the path to e.g. "/dataset/faces/faces/8_identities/train"
         self.data_dir = os.path.join(
@@ -83,11 +95,20 @@ class CelebrityFacesDataset(Dataset):
                     # here label is the celebrity name (string)
                     self.samples.append((img_path, celeb))
 
+        self.transform = transform
+
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
-        return img, label
+
+        if self.transform:
+            crops = self.transform(img) # Transformation pipeline
+        else:
+            #crops = [img]
+            crops = [TF.to_tensor(img)]
+
+        return crops, label
 

@@ -1,0 +1,13 @@
+transformations:
+  - crop
+  - rotate
+  - foveation
+  #- logpolar
+
+params:
+  crop_size: 128
+  crop_scale: 0.65
+  rotation_degrees: 15
+  sigma: 0.248
+  prNum: 6
+  logpolar_output_shape: [128, 128]
