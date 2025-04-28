@@ -2,7 +2,7 @@ transformations:
   - crop
   - rotate
   - foveation
-  #- logpolar
+  - logpolar
 
 params:
   crop_size: 128

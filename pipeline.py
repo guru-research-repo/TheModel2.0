@@ -32,43 +32,14 @@ class RandomRotator(torch.nn.Module):
             return [TF.rotate(crop, random.uniform(-self.degrees, self.degrees)) for crop in img]
         else:
             return TF.rotate(img, random.uniform(-self.degrees, self.degrees))
-
  
 # class RandomRotator(torch.nn.Module):
 #     """
-#     Applies random rotation to each image or list of images.
-#     Rotates by a random angle between [-degrees, degrees] using RandomRotation.
-#     """
-#     # def __init__(self, degrees=15):
-#     #     super().__init__()
-#     #     self.degrees = degrees  # Just store degrees range
-
-#     # def rotation(self, img):
-#     #     """
-#     #     Rotate a single image using OpenCV warpAffine.
-#     #     Input: img (Tensor, shape [C, H, W])
-#     #     Output: rotated_img (Tensor, shape [C, H, W])
-#     #     """
-#     #     if isinstance(img, torch.Tensor):
-#     #         img_np = TF.to_pil_image(img)  # Convert tensor to PIL
-#     #         img_np = np.array(img_np)      # Convert PIL to numpy
-#     #     else:
-#     #         raise ValueError(f"Expected input to be a torch.Tensor, got {type(img)} instead.")
-
-#     #     (h, w) = img_np.shape[:2]
-#     #     center = (w // 2, h // 2)
-#     #     angle = random.uniform(-self.degrees, self.degrees)  # Random angle
-#     #     M = cv2.getRotationMatrix2D(center, angle, 1.0)
-#     #     rotated = cv2.warpAffine(img_np, M, (w, h), flags=cv2.INTER_LINEAR)
-
-#     #     rotated_tensor = TF.to_tensor(rotated)  # Convert back to tensor
-#     #     return rotated_tensor
-
 #     def __init__(self, degrees=15):
 #         super().__init__()
 #         self.rotation = transforms.RandomRotation(
 #             degrees=(-degrees, degrees),
-#             interpolation=InterpolationMode.BILINEAR # FIX
+#             interpolation=InterpolationMode.BILINEAR # Can also 'BICUBIC'
 #         )
 #     def forward(self, img):
         
@@ -77,8 +48,6 @@ class RandomRotator(torch.nn.Module):
 #             return [self.rotation(crop) for crop in img]
 #         else:
 #             return self.rotation(img)
-
-
 
 class Foveater(torch.nn.Module):
     """
@@ -102,14 +71,6 @@ class Foveater(torch.nn.Module):
                 img = TF.to_tensor(img)  # Convert only if needed
             return self.foveation(img)
 
-
-        
-        # if isinstance(img, list):
-        #     # Apply foveation to each crop separately
-        #     return [self.foveation(TF.to_tensor(crop)) for crop in img]
-        # else:
-        #     return self.foveation(TF.to_tensor(img))
-
 class LogPolarTransformer(torch.nn.Module):
     """
     Applies a log-polar transformation to images.
@@ -126,9 +87,15 @@ class LogPolarTransformer(torch.nn.Module):
 
     def forward(self, img):
         if isinstance(img, list):
-            # Apply log-polar transform to each crop separately
-            return [self.logpolar(crop) for crop in img]
+            out = []
+            for crop in img:
+                if not isinstance(crop, torch.Tensor):
+                    crop = TF.to_tensor(crop)  # Convert only if needed
+                out.append(self.logpolar(crop))
+            return out
         else:
+            if not isinstance(img, torch.Tensor):
+                img = TF.to_tensor(img)  # Convert only if needed
             return self.logpolar(img)
 
 # ------------------------------------------------------------------------------
