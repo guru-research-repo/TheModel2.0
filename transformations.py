@@ -133,109 +133,47 @@ def SaliencePoints(data):
     return (points[0][0], points[1][0])
 
 # Log Polar Transformation
-class LogPolar(torch.nn.Module):
-    def __init__(self, input_shape=None, output_shape=None, smoothing = 0, mask = True, position='circumscribed', log_polar_distance = 700, random_center = False):
-        super().__init__()
-        self.input_shape = input_shape
-        self.default_center = input_shape[0] / 2, input_shape[1] / 2
+# class LogPolar(torch.nn.Module):
+#     def __init__(self, input_shape=None, output_shape=None, smoothing = None, mask = True, position='circumscribed', log_polar_distance = 40, random_center = False):
+#         super().__init__()
+#         self.input_shape = input_shape
+#         self.default_center = input_shape[0] / 2, input_shape[1] / 2
 
-        self.output_shape = output_shape
-        self.smoothing = smoothing
-        self.mask = mask
-        self.position = position
+#         self.output_shape = output_shape
+#         self.smoothing = smoothing
+#         self.mask = mask
+#         self.position = position
 
-        self.log_polar_distance = log_polar_distance
-        self.random_center = random_center
+#         self.log_polar_distance = log_polar_distance
+#         self.random_center = random_center
 
-        X, Y = self.compute_map(self.input_shape, self.output_shape)
-        self.register_buffer('X', X)
-        self.register_buffer('Y', Y)
+#         X, Y = self.compute_map(self.input_shape, self.output_shape)
+#         self.register_buffer('X', X)
+#         self.register_buffer('Y', Y)
 
-    def compute_map(self, input_shape, output_shape):
-        input_shape_x, input_shape_y = input_shape
+#     def compute_map(self, input_shape, output_shape):
+#         input_shape_x, input_shape_y = input_shape
         
-        if self.position == 'circumscribed':
-            MAX_R = torch.log(torch.tensor(input_shape).float().norm() / 2 * self.log_polar_distance)
-        else:
-            MAX_R = torch.log(torch.tensor(input_shape).float().max() / 2 * self.log_polar_distance)
+#         if self.position == 'circumscribed':
+#             MAX_R = torch.log(torch.tensor(input_shape).float().norm() / 2 * self.log_polar_distance)
+#         else:
+#             MAX_R = torch.log(torch.tensor(input_shape).float().max() / 2 * self.log_polar_distance)
 
-        theta, r = torch.meshgrid(torch.arange(self.output_shape[0]), torch.arange(self.output_shape[1]), indexing='ij')
-        theta = theta.float()
-        r = r.float()
-        X = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.cos(theta * 2 * torch.pi / self.output_shape[0])
-        Y = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.sin(theta * 2 * torch.pi / self.output_shape[0])
+#         theta, r = torch.meshgrid(torch.arange(self.output_shape[0]), torch.arange(self.output_shape[1]), indexing='ij')
+#         theta = theta.float()
+#         r = r.float()
+#         X = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.cos(theta * 2 * torch.pi / self.output_shape[0])
+#         Y = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.sin(theta * 2 * torch.pi / self.output_shape[0])
 
-        mask = (0 <= X) & (X < input_shape_x) & (0 <= Y) & (Y < input_shape_y)
+#         mask = (0 <= X) & (X < input_shape_x) & (0 <= Y) & (Y < input_shape_y)
 
-        return X, Y
+#         return X, Y
 
-    def compute_mask(self, X, Y, input_shape):
-        return (0 <= X) & (X < input_shape[0]) & (0 <= Y) & (Y < input_shape[1])
+#     def compute_mask(self, X, Y, input_shape):
+#         return (0 <= X) & (X < input_shape[0]) & (0 <= Y) & (Y < input_shape[1])
 
-    def forward(self, data, center_x=None, center_y=None):
-        H, W = data.shape[-2:]  # Get current input dimensions
-    
-        # Always recompute map for current size
-        X, Y = self.compute_map((H, W), self.output_shape)
-    
-        # Decide center
-        if center_x is None or center_y is None:
-            if self.random_center and random.random() > 0.4:
-                center_y, center_x = SaliencePoints(data)
-                # Clamp to valid range
-                center_y = np.clip(center_y, 0, H-1)
-                center_x = np.clip(center_x, 0, W-1)
-            else:
-                center_y, center_x = H / 2, W / 2  # Middle of the current image
-    
-        # Shift map
-        X = center_x + X
-        Y = center_y - Y
-    
-        # Compute valid mask
-        mask = self.compute_mask(X, Y, (H, W)) if self.mask else torch.ones_like(X)
-    
-        # No smoothing
-        if self.smoothing is None:
-            return (
-                mask * (
-                    data[
-                        ...,
-                        Y.long().clamp(0, H-1),
-                        X.long().clamp(0, W-1)
-                    ]
-                )
-            )
-    
-        # With smoothing
-        blur = torchvision.transforms.GaussianBlur(5, 1)
-    
-        y_down, x_down = Y.long().clamp(0, H-1), X.long().clamp(0, W-1)
-        y_up, x_up = (y_down+1).clamp(0, H-1), (x_down+1).clamp(0, W-1)
-    
-        down_down_dist = (Y - y_down)**self.smoothing + (X - x_down)**self.smoothing
-        down_up_dist = (Y - y_down)**self.smoothing + (X - x_up)**self.smoothing
-        up_down_dist = (Y - y_up)**self.smoothing + (X - x_down)**self.smoothing
-        up_up_dist = (Y - y_up)**self.smoothing + (X - x_up)**self.smoothing
-    
-        total_dist = down_down_dist + down_up_dist + up_down_dist + up_up_dist
-    
-        down_down_weight = down_down_dist / total_dist
-        down_up_weight = down_up_dist / total_dist
-        up_down_weight = up_down_dist / total_dist
-        up_up_weight = up_up_dist / total_dist
-    
-        return (
-            mask * (
-                down_down_weight * data[..., y_down, x_down] +
-                down_up_weight * data[..., y_down, x_up] +
-                up_down_weight * data[..., y_up, x_down] +
-                up_up_weight * data[..., y_up, x_up]
-            )
-        )
-
-    
 #     def forward(self, data, center_x = None, center_y = None):
+       
 #         if data.shape[-2:] != self.input_shape:
 #             X, Y = self.compute_map(data.shape[-2:], self.output_shape)
 #         else:
@@ -251,7 +189,7 @@ class LogPolar(torch.nn.Module):
 #         X = center_x + X
 #         Y = center_y - Y
 
-# #         print("centre", center_x, center_y )
+#         print("centre", center_x, center_y )
 #         mask = self.compute_mask(X, Y, self.input_shape)  if self.mask else torch.ones_like(X)
 #         if self.smoothing == None:
 #             return (
@@ -292,3 +230,72 @@ class LogPolar(torch.nn.Module):
 #                 up_up_weight * data[...,y_up,x_up]
 #             )
 #         )
+####################################################################################
+# Below is something more in-built from open-cv on log-polarizing stuff - worked better than above LogPolar class.
+############################################################################
+class LogPolar(torch.nn.Module):
+    def __init__(self, input_shape=None, output_shape=None, smoothing=None, mask=True, position='circumscribed', log_polar_distance=40, random_center=False):
+        super().__init__()
+        self.input_shape = input_shape
+        self.default_center = input_shape[0] / 2, input_shape[1] / 2
+        self.output_shape = output_shape
+        self.smoothing = smoothing
+        self.mask = mask
+        self.position = position
+        self.log_polar_distance = log_polar_distance
+        self.random_center = random_center
+
+        X, Y = self.compute_map(self.input_shape, self.output_shape)
+        self.register_buffer('X', X)
+        self.register_buffer('Y', Y)
+
+    def compute_map(self, input_shape, output_shape):
+        input_shape_x, input_shape_y = input_shape
+        
+        if self.position == 'circumscribed':
+            MAX_R = torch.log(torch.tensor(input_shape).float().norm() / 2 * self.log_polar_distance)
+        else:
+            MAX_R = torch.log(torch.tensor(input_shape).float().max() / 2 * self.log_polar_distance)
+
+        theta, r = torch.meshgrid(torch.arange(self.output_shape[0]), torch.arange(self.output_shape[1]), indexing='ij')
+        theta = theta.float()
+        r = r.float()
+        X = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.cos(theta * 2 * torch.pi / self.output_shape[0])
+        Y = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.sin(theta * 2 * torch.pi / self.output_shape[0])
+
+        return X, Y
+
+    def opencv_logpolar(self, tensor, center=None, M=40):
+        """
+        Apply OpenCV log-polar transform to a PyTorch tensor image.
+        Args:
+            tensor: torch.Tensor (C, H, W) [values 0-1]
+            center: (cx, cy) if None, defaults to center of image
+            M: scaling factor, larger M means finer radial resolution
+        Returns:
+            torch.Tensor (C, H, W) transformed log-polar image
+        """
+        img = tensor.permute(1, 2, 0).cpu().numpy()  # (H, W, C)
+        img = (img * 255).astype(np.uint8)
+    
+        H, W = img.shape[:2]
+        if center is None:
+            center = (W // 2, H // 2)
+    
+        logpolar_img = cv2.logPolar(
+            img,
+            center,
+            M,
+            flags=cv2.INTER_LINEAR + cv2.WARP_FILL_OUTLIERS
+        )
+    
+        logpolar_tensor = torch.from_numpy(logpolar_img).permute(2, 0, 1).float() / 255.
+        return logpolar_tensor
+
+    def forward(self, data, center_x=None, center_y=None):
+        if center_x is None or center_y is None:
+            center_y, center_x = data.shape[-2] / 2, data.shape[-1] / 2
+    
+        logpolar_tensor = self.opencv_logpolar(data, center=(center_x, center_y), M=self.log_polar_distance)
+        return logpolar_tensor
+
