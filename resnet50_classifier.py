@@ -380,7 +380,8 @@ def main():
 
     ### Model
     model = Model(args.classes)
-    model = nn.DataParallel(model).to(device)
+    #model = nn.DataParallel(model).to(device)
+    model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.initial_lr, weight_decay=1e-3)
 
