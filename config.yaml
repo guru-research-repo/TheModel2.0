@@ -1,0 +1,58 @@
+runs:
+- compute:
+    logging_interval: 5
+    num_nodes: 1
+    num_workers: 12
+    overfit_batches: false
+  data:
+    basic_level: false
+    classes:
+    - 128
+    dataset: /awsmount
+    name: faces
+    output: /data/out/clean_datav2
+    repetitions: 1
+  model:
+    accumulate_grad_batches: 1
+    classes: 128
+    name: resnet_small
+    zdim: 2048
+  name: lp_res18_no_aug_node1
+  training:
+    batch_size: 256
+    epochs: 2000
+    initial_lr: 0.00001
+    lr_schedule_frequency: 1
+    lr_schedule_gamma: 0.99
+    pool_dim: 6
+  transformations:
+    color:
+      active: false
+      grayscale_probability: 0.2
+      jitter_strength: 1.0
+    count: 1
+    crop:
+      crop_size: 180
+      points: 4
+      type: salience
+    pad:
+      pad_h: 40
+      pad_v: 10
+      active: false
+    flip:
+      active: false
+      flip_probability: 0.5
+    foveat:
+      active: false
+    log_polar:
+      active: true
+      random: false
+      lp_out_shape:
+      - 192
+      - 164
+      mask: false
+      smoothing: 0
+    rotate:
+      active: true
+      max_rotate: 15
+    type: custom
