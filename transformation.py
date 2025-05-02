@@ -1,9 +1,24 @@
+"""
+transforms.py
+
+Provides five image transformation functions:
+
+- four_random_crops: generates four random square-like crops from a single image; does not support batch input.
+- rotate: rotates images by a random angle within ±max_deg or 180° if inverse=True; supports both single-image (C,H,W) and batch (N,C,H,W) input, applying the same angle across the batch.
+- foveation: simulates foveal blur via multi-scale Gaussian pyramids centered on a point in a tensor image; single-image only.
+- logpolar_cv2: applies OpenCV's log-polar mapping to a single image (tensor or PIL); no batch support.
+- logpolar_manual: manually computes a log-polar transform in PyTorch with optional smoothing and custom center selection; supports batch input.
+
+Each function returns an output with the same shape as its input. Batch support is indicated per-function above.
+
+"""
+
 import random
 import cv2
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
-
+import torchvision.transforms.functional as TF
 import numpy as np
 
 def four_random_crops(img: torch.Tensor, crop_scale: float = 0.65) -> list[torch.Tensor]:
@@ -33,6 +48,43 @@ def four_random_crops(img: torch.Tensor, crop_scale: float = 0.65) -> list[torch
         crops.append(patch)
 
     return crops
+
+def rotate(
+    data: torch.Tensor,
+    max_deg: float = 15.0,
+    inverse: bool = False
+) -> torch.Tensor:
+    """
+    Rotate the image tensor by a random angle in [-max_deg, max_deg],
+    or by 180° if inverse=True.
+
+    Args:
+        data (torch.Tensor): Input image of shape (C, H, W) or batch (N, C, H, W).
+        max_deg (float): Maximum absolute rotation angle (±max_deg).
+        inverse (bool): If True, rotate by exactly 180° instead of a random angle.
+
+    Returns:
+        torch.Tensor: Rotated image(s), same shape as input.
+    """
+    # Choose angle
+    angle = 180.0 if inverse else random.uniform(-max_deg, max_deg)
+
+    # Use bilinear interpolation for smooth rotations
+    interp = T.InterpolationMode.BILINEAR
+
+    # Single image
+    if data.ndim == 3:  # (C, H, W)
+        return TF.rotate(data, angle, interpolation=interp)
+
+    # Batch of images
+    elif data.ndim == 4:  # (N, C, H, W)
+        return torch.stack([
+            TF.rotate(img, angle, interpolation=interp) 
+            for img in data
+        ], dim=0)
+
+    else:
+        raise ValueError(f"rotate() expected a 3D or 4D tensor, got shape {data.shape}")
 
 def foveation(img: torch.Tensor, crop_size: int = 224):
     """

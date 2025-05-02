@@ -17,4 +17,5 @@ Steps to run the project:
    `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
 5. Install the remaining dependencies (may need additional packages)
    `pip install numpy matplotlib opencv-python`
-6. From project root, run `python main.py` command.
+6. Run `python data_preprocess.py` to create pre-processed data on local disk.
+7. From project root, run `python main.py` command.

@@ -4,12 +4,67 @@ from Datasets import *
 import torch
 import numpy as np
 
+def load_raw_data(name, identity=4, task="train"):
+    print("Start loading raw data arrays")
+    if name == "celeb":
+        images, labels = load_celeba_face_id_np(split=task)
+    print(f"Loaded dataset {name}, task = {task}")
+    return images, labels
+
 def load_dataset(dataset, identity=4, task="train"):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="data", split=task)
     elif dataset == "faces":
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task)
     return ds
+
+def load_celeba_face_id_np(root_dir: str = "data",
+                           split: str = "train"
+                          ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load the CelebA_HQ facial identity dataset into NumPy arrays.
+
+    Args:
+        root_dir (str): Path to folder containing "CelebA_HQ_facial_identity_dataset".
+        split    (str): "train" or "test".
+
+    Returns:
+        images_np (np.ndarray): Float32 array of shape (N, 3, H, W), values in [0,1].
+        labels_np (np.ndarray): Int64 array of shape (N,), identity labels.
+    """
+    samples = []
+    root_path   = Path(root_dir)
+    split_dir   = root_path / "CelebA_HQ_facial_identity_dataset" / split
+
+    if not split_dir.is_dir():
+        raise FileNotFoundError(f"Could not find split directory: {split_dir!r}")
+
+    # collect (path, label) pairs
+    for person_dir in sorted(split_dir.iterdir()):
+        if not person_dir.is_dir():
+            continue
+        try:
+            label = int(person_dir.name)
+        except ValueError:
+            continue
+        for img_path in sorted(person_dir.glob("*.jpg")):
+            samples.append((img_path, label))
+
+    # preallocate lists
+    images = []
+    labels = []
+
+    for img_path, label in samples:
+        img = Image.open(img_path).convert("RGB")
+        arr = np.array(img, dtype=np.float32) / 255.0     # H×W×3, float32
+        arr = arr.transpose(2, 0, 1)                     # → 3×H×W
+        images.append(arr)
+        labels.append(label)
+
+    images_np = np.stack(images, axis=0)                # N×3×H×W
+    labels_np = np.array(labels, dtype=np.int64)        # N
+
+    return images_np, labels_np
 
 def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
     """
