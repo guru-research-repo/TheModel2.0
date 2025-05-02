@@ -1,10 +1,17 @@
 import os
 import torch
 import torchvision.transforms.functional as TF
+from utils import get_label_mapping, label_to_one_hot
 from pathlib import Path
 from PIL import Image
 from torch.utils.data import Dataset
 
+def load_dataset(dataset, identity=4, task="train"):
+    if dataset == "celeb":
+        ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
+    elif dataset == "faces":
+        ds = CelebrityFacesDataset(root_dir="processed_data", num_identities=identity, split=task)
+    return ds
 
 class CelebAFaceIDDataset(Dataset):
     def __init__(self, root_dir: str = "data", split: str = "train"):
@@ -71,12 +78,14 @@ class CelebrityFacesDataset(Dataset):
             if os.path.isdir(os.path.join(self.data_dir, d))
         )
 
+        self.map = get_label_mapping()
+
         # collect (image_path, label) tuples
         self.samples = []
         for celeb in self.classes:
             celeb_dir = os.path.join(self.data_dir, celeb)
             for fname in sorted(os.listdir(celeb_dir)):
-                if fname.lower().endswith(".jpg"):
+                if fname.lower().endswith(".png"):
                     img_path = os.path.join(celeb_dir, fname)
                     # here label is the celebrity name (string)
                     self.samples.append((img_path, celeb))
@@ -88,6 +97,7 @@ class CelebrityFacesDataset(Dataset):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
         img = TF.to_tensor(img)
+        label = label_to_one_hot(label, self.map)
         # label = torch.tensor(int(label), dtype=torch.long)
         return img, label
 

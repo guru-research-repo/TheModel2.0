@@ -6,6 +6,8 @@ import torchvision.transforms.functional as TF
 
 from transformation import *
 
+print("Environment Initialized")
+
 # Default dataset name and identity counts for 'faces'
 DEFAULT_DATASET = "faces"
 IDENTITY_COUNTS = [4, 8, 16, 32, 64, 128]
@@ -45,6 +47,7 @@ def process_dataset(
     splits = ["train", "valid", "test"]
 
     for sub in sub_dirs:
+        print(f"Now processing sub directory {sub}.")
         for split in splits:
             input_split = sub / split
             if not input_split.exists():

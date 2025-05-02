@@ -1,70 +1,67 @@
 import math
 import matplotlib.pyplot as plt
-from Datasets import *
+# from Datasets import *
 import torch
 import numpy as np
+import os
+import torch.nn.functional as F
 
-def load_raw_data(name, identity=4, task="train"):
-    print("Start loading raw data arrays")
-    if name == "celeb":
-        images, labels = load_celeba_face_id_np(split=task)
-    print(f"Loaded dataset {name}, task = {task}")
-    return images, labels
+# def load_raw_data(name, identity=4, task="train"):
+#     print("Start loading raw data arrays")
+#     if name == "celeb":
+#         images, labels = load_celeba_face_id_np(split=task)
+#     print(f"Loaded dataset {name}, task = {task}")
+#     return images, labels
 
-def load_dataset(dataset, identity=4, task="train"):
-    if dataset == "celeb":
-        ds = CelebAFaceIDDataset(root_dir="data", split=task)
-    elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task)
-    return ds
 
-def load_celeba_face_id_np(root_dir: str = "data",
-                           split: str = "train"
-                          ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Load the CelebA_HQ facial identity dataset into NumPy arrays.
 
-    Args:
-        root_dir (str): Path to folder containing "CelebA_HQ_facial_identity_dataset".
-        split    (str): "train" or "test".
+# def load_celeba_face_id_np(root_dir: str = "data",
+#                            split: str = "train"
+#                           ) -> tuple[np.ndarray, np.ndarray]:
+#     """
+#     Load the CelebA_HQ facial identity dataset into NumPy arrays.
 
-    Returns:
-        images_np (np.ndarray): Float32 array of shape (N, 3, H, W), values in [0,1].
-        labels_np (np.ndarray): Int64 array of shape (N,), identity labels.
-    """
-    samples = []
-    root_path   = Path(root_dir)
-    split_dir   = root_path / "CelebA_HQ_facial_identity_dataset" / split
+#     Args:
+#         root_dir (str): Path to folder containing "CelebA_HQ_facial_identity_dataset".
+#         split    (str): "train" or "test".
 
-    if not split_dir.is_dir():
-        raise FileNotFoundError(f"Could not find split directory: {split_dir!r}")
+#     Returns:
+#         images_np (np.ndarray): Float32 array of shape (N, 3, H, W), values in [0,1].
+#         labels_np (np.ndarray): Int64 array of shape (N,), identity labels.
+#     """
+#     samples = []
+#     root_path   = Path(root_dir)
+#     split_dir   = root_path / "CelebA_HQ_facial_identity_dataset" / split
 
-    # collect (path, label) pairs
-    for person_dir in sorted(split_dir.iterdir()):
-        if not person_dir.is_dir():
-            continue
-        try:
-            label = int(person_dir.name)
-        except ValueError:
-            continue
-        for img_path in sorted(person_dir.glob("*.jpg")):
-            samples.append((img_path, label))
+#     if not split_dir.is_dir():
+#         raise FileNotFoundError(f"Could not find split directory: {split_dir!r}")
 
-    # preallocate lists
-    images = []
-    labels = []
+#     # collect (path, label) pairs
+#     for person_dir in sorted(split_dir.iterdir()):
+#         if not person_dir.is_dir():
+#             continue
+#         try:
+#             label = int(person_dir.name)
+#         except ValueError:
+#             continue
+#         for img_path in sorted(person_dir.glob("*.jpg")):
+#             samples.append((img_path, label))
 
-    for img_path, label in samples:
-        img = Image.open(img_path).convert("RGB")
-        arr = np.array(img, dtype=np.float32) / 255.0     # H×W×3, float32
-        arr = arr.transpose(2, 0, 1)                     # → 3×H×W
-        images.append(arr)
-        labels.append(label)
+#     # preallocate lists
+#     images = []
+#     labels = []
 
-    images_np = np.stack(images, axis=0)                # N×3×H×W
-    labels_np = np.array(labels, dtype=np.int64)        # N
+#     for img_path, label in samples:
+#         img = Image.open(img_path).convert("RGB")
+#         arr = np.array(img, dtype=np.float32) / 255.0     # H×W×3, float32
+#         arr = arr.transpose(2, 0, 1)                     # → 3×H×W
+#         images.append(arr)
+#         labels.append(label)
 
-    return images_np, labels_np
+#     images_np = np.stack(images, axis=0)                # N×3×H×W
+#     labels_np = np.array(labels, dtype=np.int64)        # N
+
+#     return images_np, labels_np
 
 def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
     """
@@ -137,3 +134,51 @@ def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
 
     plt.tight_layout()
     plt.show()
+
+def get_label_mapping(root_dir="data", num_identities=128, split="test"):
+    """
+    Scan "<root_dir>/faces/faces/{num_identities}_identities/{split}"
+    and return a dict mapping each class-name (folder name) to a unique index.
+
+    Args:
+        root_dir (str): base path to your "/dataset" folder
+        num_identities (int): 4, 8, …, 128
+        split (str): "train", "valid" or "test"
+    Returns:
+        dict: { class_name: idx, … }
+    """
+    data_dir = os.path.join(
+        root_dir,
+        "faces",
+        "faces",
+        f"{num_identities}_identities",
+        split
+    )
+    if not os.path.isdir(data_dir):
+        raise ValueError(f"Directory not found: {data_dir!r}")
+
+    classes = sorted(
+        d for d in os.listdir(data_dir)
+        if os.path.isdir(os.path.join(data_dir, d))
+    )
+    mapping = {}
+    for idx, cls_name in enumerate(classes):
+        mapping[cls_name] = idx
+    return mapping
+
+
+def label_to_one_hot(label, mapping):
+    """
+    Convert a string label into a one-hot tensor.
+
+    Args:
+        label (str): the class-name (must be a key in mapping)
+        mapping (dict): mapping returned by get_label_mapping()
+    Returns:
+        torch.FloatTensor of shape (num_classes,), e.g. [0,0,1,0,…]
+    """
+    idx = mapping[label]
+    num_classes = len(mapping)
+    # create one-hot and cast to float
+    return F.one_hot(torch.tensor(idx, dtype=torch.long),
+                     num_classes=num_classes).float()
