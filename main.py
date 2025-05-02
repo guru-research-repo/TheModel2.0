@@ -1,4 +1,5 @@
 from utils import *
+from transformation import *
 
 # ------------------------------------------------------------------------
 # Configuration
@@ -10,7 +11,7 @@ from utils import *
 #               and splits "train", "valid", "test"
 dataset_name   = "faces"  # Options: "celeb", "faces"
 identity_count = 4        # Only used when dataset_name == "faces"
-split          = "test"   # For "celeb": {"train", "test"};
+split          = "train"   # For "celeb": {"train", "test"};
                             # for "faces": {"train", "valid", "test"}
 
 # ------------------------------------------------------------------------
@@ -25,4 +26,6 @@ ds = load_dataset(
     dataset=dataset_name,
     identity=identity_count,
     task=split
-)
+) 
+
+show_images([logpolar_cv2(ds[7][0]), logpolar_manual(ds[7][0])])
