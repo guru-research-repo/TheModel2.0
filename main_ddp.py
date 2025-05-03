@@ -129,9 +129,9 @@ def main():
                 outputs = model(inputs)
                 valid_accs.append((outputs.argmax(dim=1)==label_ids).float().mean().item())
         if is_main:
-            mean = torch.tensor(valid_accs).mean().item()
-            std  = torch.tensor(valid_accs).std().item()
-            print(f"    Valid Acc = {mean*100:.2f}% ± {std*100:.2f}%")
+            valid_mean = torch.tensor(valid_accs).mean().item()
+            valid_std  = torch.tensor(valid_accs).std().item()
+            print(f"    Valid Acc = {valid_mean*100:.2f}% ± {valid_std*100:.2f}%")
 
         # Testing
         test_accs = []
@@ -143,16 +143,16 @@ def main():
                 outputs = model(inputs)
                 test_accs.append((outputs.argmax(dim=1)==label_ids).float().mean().item())
         if is_main:
-            mean = torch.tensor(test_accs).mean().item()
-            std  = torch.tensor(test_accs).std().item()
-            print(f"    Test  Acc = {mean*100:.2f}% ± {std*100:.2f}%\n")
+            test_mean = torch.tensor(test_accs).mean().item()
+            test_std  = torch.tensor(test_accs).std().item()
+            print(f"    Test  Acc = {test_mean*100:.2f}% ± {test_std*100:.2f}%\n")
 
         if is_main:
             history.append({
                 "epoch": epoch, "identity": ident,
                 "train_acc": correct/total,
-                "valid_mean": mean, "valid_std": std,
-                "test_mean": mean,  "test_std": std
+                "valid_mean": valid_mean, "valid_std": valid_std,
+                "test_mean": test_mean,  "test_std": test_std
             })
 
     if is_main:
