@@ -47,6 +47,12 @@ def main():
 
     model = Model()
 
+ # --- multi‑GPU wrap ---
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        n_gpu = min(6, torch.cuda.device_count())
+        print(f"→ Using {n_gpu} GPUs")
+        model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
+        
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
