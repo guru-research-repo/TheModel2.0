@@ -41,7 +41,7 @@ def main():
 
     # Hyper‑parameters
     history         = []
-    batch_size      = 32
+    batch_size      = 64
     lr              = 1e-3
     device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -52,7 +52,7 @@ def main():
         n_gpu = min(6, torch.cuda.device_count())
         print(f"→ Using {n_gpu} GPUs")
         model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
-        
+
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
