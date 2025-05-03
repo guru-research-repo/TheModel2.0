@@ -18,7 +18,7 @@ def main():
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
-    num_gpu = 2
+    num_gpu = 1
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
