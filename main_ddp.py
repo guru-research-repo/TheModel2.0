@@ -26,27 +26,25 @@ def parse_args():
 
 def main():
     args = parse_args()
-    # Determine local rank (support both CLI and env var)
+    # Determine local rank
     local_rank = int(os.environ.get("LOCAL_RANK", args.local_rank))
-    # Assign this process to the correct GPU
     torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}")
 
-    # Initialize the distributed process group
+    # Init process group
     dist.init_process_group(backend="nccl", init_method="env://")
-
     is_main = (local_rank == 0)
     if is_main:
         os.makedirs("output", exist_ok=True)
 
-    # Configs
+    # Config
     dataset_name    = "faces"
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train", "valid", "test"]
     total_epochs    = args.epochs
     epoch_block     = args.epoch_block
 
-    # Pre‐load datasets on CPU
+    # Load datasets (CPU)
     all_datasets = {
         ident: { split: load_dataset(dataset_name, ident, split)
                  for split in splits }
@@ -57,41 +55,43 @@ def main():
         idx = (epoch - 1) // epoch_block
         return identity_counts[idx]
 
-    # Build, move & wrap the model
+    # Build and wrap model with DDP, enabling unused parameter detection
     model     = Model().to(device)
-    model     = DDP(model, device_ids=[local_rank], output_device=local_rank)
+    model     = DDP(model,
+                    device_ids=[local_rank],
+                    output_device=local_rank,
+                    find_unused_parameters=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = torch.nn.CrossEntropyLoss()
 
     history = []
     for epoch in range(1, total_epochs + 1):
         ident = identity_for_epoch(epoch)
+        # Distributed samplers
+        train_ds = all_datasets[ident]["train"]
+        valid_ds = all_datasets[ident]["valid"]
+        test_ds  = all_datasets[ident]["test"]
 
-        # Samplers
-        train_dataset = all_datasets[ident]["train"]
-        valid_dataset = all_datasets[ident]["valid"]
-        test_dataset  = all_datasets[ident]["test"]
+        train_sampler = DistributedSampler(train_ds, shuffle=True)
+        valid_sampler = DistributedSampler(valid_ds, shuffle=False)
+        test_sampler  = DistributedSampler(test_ds, shuffle=False)
 
-        train_sampler = DistributedSampler(train_dataset, shuffle=True)
-        valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
-        test_sampler  = DistributedSampler(test_dataset, shuffle=False)
-
-        # Loaders
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
+        # DataLoaders
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size,
                                   sampler=train_sampler,
                                   num_workers=args.num_workers,
                                   pin_memory=True)
-        valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size,
+        valid_loader = DataLoader(valid_ds, batch_size=args.batch_size,
                                   sampler=valid_sampler,
                                   num_workers=args.num_workers,
                                   pin_memory=True)
-        test_loader  = DataLoader(test_dataset, batch_size=args.batch_size,
+        test_loader  = DataLoader(test_ds, batch_size=args.batch_size,
                                   sampler=test_sampler,
                                   num_workers=args.num_workers,
                                   pin_memory=True)
         train_sampler.set_epoch(epoch)
 
-        # Training
+        # Training loop
         model.train()
         correct = total = 0
         if is_main:
@@ -116,7 +116,7 @@ def main():
                 pbar.set_postfix(acc=f"{(correct/total)*100:.2f}%")
         if is_main:
             pbar.close()
-            print(f"→ Epoch {epoch}/{total_epochs} — Accuracy: {(correct/total)*100:.2f}%")
+            print(f"→ Epoch {epoch} — Acc: {(correct/total)*100:.2f}%")
 
         # Validation
         model.eval()
@@ -162,5 +162,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Launch with:
-# torchrun --nproc_per_node=6 --master_port=29500 main_ddp.py --batch_size 64 --num_workers 4 --epochs 240 --epoch_block 40
+# Launch:
+# torchrun --nproc_per_node=6 --master_port=29500 main_ddp.py \
+#   --batch_size 64 --num_workers 4 --epochs 240 --epoch_block 40
