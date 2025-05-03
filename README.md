@@ -16,6 +16,6 @@ Steps to run the project:
    Make sure you have CUDA 12.8 support, then run:
    `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
 5. Install the remaining dependencies (may need additional packages)
-   `pip install numpy matplotlib opencv-python`
+   `pip install numpy pandas pyyaml matplotlib opencv-python`
 6. Run `python data_preprocess.py` to create pre-processed data on local disk.
 7. From project root, run `python main.py` command.
