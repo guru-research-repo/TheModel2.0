@@ -13,12 +13,12 @@ def main():
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
-    dataset_name   = "faces"
+    dataset_name    = "faces"
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
-    num_gpu = 1
+    num_gpu         = 6
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
@@ -42,7 +42,7 @@ def main():
 
     # Hyper‑parameters
     history         = []
-    batch_size      = 64
+    batch_size      = 512
     lr              = 1e-3
     device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
