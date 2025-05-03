@@ -12,7 +12,6 @@ from transformation import *
 from model import Model
 from Datasets import load_dataset
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", type=int, default=0,
@@ -160,6 +159,8 @@ def main():
     dist.destroy_process_group()
 
 if __name__ == "__main__":
+    print("Did you run `torchrun --nproc_per_node=6 --master_port=29500 main_ddp.py \
+          --batch_size 64 --num_workers 4 --epochs 240 --epoch_block 40`?")
     main()
 
 # Launch:
