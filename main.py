@@ -18,6 +18,7 @@ def main():
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
+    num_gpu = 2
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
@@ -48,10 +49,10 @@ def main():
     model = Model()
 
  # --- multi‑GPU wrap ---
-    # if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-    #     n_gpu = min(6, torch.cuda.device_count())
-    #     print(f"→ Using {n_gpu} GPUs")
-    #     model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        n_gpu = min(num_gpu, torch.cuda.device_count())
+        print(f"→ Using {n_gpu} GPUs")
+        model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
 
     model = model.to(device)
 
