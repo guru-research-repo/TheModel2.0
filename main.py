@@ -18,7 +18,8 @@ def main():
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
-    num_gpu         = 6
+    num_gpu         = 1
+    num_workers     = 4
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
@@ -42,7 +43,7 @@ def main():
 
     # Hyper‑parameters
     history         = []
-    batch_size      = 512
+    batch_size      = 64
     lr              = 1e-3
     device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -68,21 +69,21 @@ def main():
             all_datasets[ident]["train"],
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=num_workers,
             pin_memory=True
         )
         valid_loader = DataLoader(
             all_datasets[ident]["valid"],
             batch_size=batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=num_workers,
             pin_memory=True
         )
         test_loader  = DataLoader(
             all_datasets[ident]["test"],
             batch_size=batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=num_workers,
             pin_memory=True
         )
 
