@@ -3,7 +3,6 @@ import argparse
 import pandas as pd
 import torch
 import torch.distributed as dist
-from torch.distributed import ReduceOp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -122,6 +121,7 @@ def main():
         dist.all_gather_object(all_train, train_accs)
 
         if is_main:
+            pbar.close()
             # flatten and compute stats
             flat_train = [a for sub in all_train for a in sub]
             train_mean = torch.tensor(flat_train).mean().item()
