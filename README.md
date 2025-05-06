@@ -15,8 +15,8 @@ Steps to run the project:
    Make sure you have CUDA 12.8 support, then run:
    `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
 4. Install the remaining dependencies (may need additional packages)
-   `pip install numpy pandas pyyaml matplotlib opencv-python`
+   `pip install numpy pandas pyyaml matplotlib opencv-python tqdm`
 5. Run `python download.py` to get all dataset downloaded.
 6. Run `python data_preprocess.py` to create pre-processed data on local disk.
-7. From project root, run `python main.py` command.
+7. From project root, run `python main.py` command, or `torchrun --nproc_per_node=6 --master_port=29500 main_ddp.py`.
 8. See the `output` folder for train, validation and test accuracy / standard deviation.

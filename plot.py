@@ -15,15 +15,15 @@ test_std = df['test_std'].values
 fig, ax = plt.subplots()
 
 # Plot mean lines
-# ax.plot(epochs, train, label='Train', color='tab:blue')
+ax.plot(epochs, train, label='Train', color='tab:blue')
 ax.plot(epochs, valid, label='Valid', color='tab:orange')
 ax.plot(epochs, test, label='Test', color='tab:green')
 
 # Shade ±1 std deviation
-# ax.fill_between(epochs, valid - valid_std, valid + valid_std,
-#                 color='tab:orange', alpha=0.2)
-# ax.fill_between(epochs, test - test_std, test + test_std,
-#                 color='tab:green', alpha=0.2)
+ax.fill_between(epochs, valid - valid_std, valid + valid_std,
+                color='tab:orange', alpha=0.2)
+ax.fill_between(epochs, test - test_std, test + test_std,
+                color='tab:green', alpha=0.2)
 
 # Labels and legend
 ax.set_xlabel('Epoch')
