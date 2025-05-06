@@ -5,9 +5,11 @@ transformations:
   - logpolar
 
 params:
-  crop_size: 128
+  crop_size: 180 
+  #224 is the crop size given in old repo based on which n_random_crop.py runs
   crop_scale: 0.65
   rotation_degrees: 15
   sigma: 0.248
   prNum: 6
-  logpolar_output_shape: [128, 128]
+  logpolar_output_shape: [192, 164]
+  #[192, 164] is given in prev code repo, Martha has given 190,165

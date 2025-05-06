@@ -46,8 +46,8 @@ class Model(torch.nn.Module):
     def forward(self, x):
         x = self.model(x)
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)  # Replaces torch.squeeze(x)
-        #x = torch.squeeze(x)
+        #x = x.view(x.size(0), -1)  # Replaces torch.squeeze(x)
+        x = torch.squeeze(x)
         x = self.fc1(x)
         x = self.fc2(x)
 
@@ -336,56 +336,54 @@ def main():
         dataset=args.dataset_name,
         identity=args.identity_count,
         task='train',
-        transform=transform_pipeline
+        transform=build_transform_pipeline(config, inversion=None)
     )
 
     val_dataset_upright = load_dataset(
         dataset=args.dataset_name,
         identity=args.identity_count,
         task='valid',
-        transform=transform_pipeline
+        transform=build_transform_pipeline(config, inversion=False)
     )
 
     val_dataset_inverted = load_dataset(
         dataset=args.dataset_name,
         identity=args.identity_count,
         task='valid',
-        transform=build_transform_pipeline(config),
-        inversion=True  # <-- apply inversion
+        transform=build_transform_pipeline(config, inversion=True)  # <-- apply inversion
     )
 
     test_dataset_upright = load_dataset(
         dataset=args.dataset_name,
         identity=args.identity_count,
         task='test',
-        transform=transform_pipeline
+        transform=build_transform_pipeline(config, inversion=False)
     )
 
     test_dataset_inverted = load_dataset(
         dataset=args.dataset_name,
         identity=args.identity_count,
         task='test',
-        transform=build_transform_pipeline(config),
-        inversion=True  # <-- apply inversion
+        transform=build_transform_pipeline(config, inversion=True)  # <-- apply inversion
     )
 
-    print(type(train_dataset))
     ### Data Loaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
-    print(type(train_loader))
-    val_loader_upright = torch.utils.data.DataLoader(val_dataset_upright, batch_size=args.batch_size, shuffle=False, **kwargs)
-    val_loader_inverted = torch.utils.data.DataLoader(val_dataset_inverted, batch_size=args.batch_size, shuffle=False, **kwargs)
-    test_loader_upright = torch.utils.data.DataLoader(test_dataset_upright, batch_size=args.batch_size, shuffle=False, **kwargs)
-    test_loader_inverted = torch.utils.data.DataLoader(test_dataset_inverted, batch_size=args.batch_size, shuffle=False, **kwargs)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    val_loader_upright = torch.utils.data.DataLoader(val_dataset_upright, batch_size=args.batch_size, shuffle=True)
+    val_loader_inverted = torch.utils.data.DataLoader(val_dataset_inverted, batch_size=args.batch_size, shuffle=True)
+    test_loader_upright = torch.utils.data.DataLoader(test_dataset_upright, batch_size=args.batch_size, shuffle=True)
+    test_loader_inverted = torch.utils.data.DataLoader(test_dataset_inverted, batch_size=args.batch_size, shuffle=True)
 
     ### Model
     model = Model(args.classes)
     #model = nn.DataParallel(model).to(device)
     model = model.to(device)
 
+
     optimizer = optim.Adam(model.parameters(), lr=args.initial_lr, weight_decay=1e-3)
 
     low_val_upright_loss = np.inf
+    
     loss_file = open(os.path.join(outpath, 'loss.txt'), 'w')
     print("About to start Training any time now")
 
@@ -452,5 +450,11 @@ def main():
 
 
 if __name__ == '__main__':
+    import torch
+
+    print("Available GPUs:")
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)} - Memory: {torch.cuda.memory_allocated(i)//(1024**2)} MB allocated")
+
     main()
 

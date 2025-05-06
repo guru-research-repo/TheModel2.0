@@ -17,6 +17,26 @@ class RandomCropper(torch.nn.Module):
     def forward(self, img):
         return self.cropper(img)  # returns list of crops
 
+# class RandomCropper(nn.Module):
+#     """
+#     Randomly crops the input image into `num_points` crops of size `crop_size`.
+#     Each call returns a list of cropped versions of the input image.
+#     """
+#     def __init__(self, num_points=4, crop_size=224):
+#         super().__init__()
+#         self.num_points = num_points
+#         self.crop_tool = transforms.RandomCrop(crop_size)
+
+#     def forward(self, img):
+#         """
+#         Args:
+#             img (PIL Image or Tensor): Input image to be cropped.
+
+#         Returns:
+#             list of images: List of cropped images.
+#         """
+#         return [self.crop_tool(img) for _ in range(self.num_points)]
+
 class RandomRotator(torch.nn.Module):
     """
     Applies random rotation to each image or list of images.
@@ -28,26 +48,25 @@ class RandomRotator(torch.nn.Module):
         
     def forward(self, img):
         if isinstance(img, list):
-            # Rotate each crop separetely
+            # Rotate each crop separetely 
             return [TF.rotate(crop, random.uniform(-self.degrees, self.degrees)) for crop in img]
         else:
             return TF.rotate(img, random.uniform(-self.degrees, self.degrees))
- 
-# class RandomRotator(torch.nn.Module):
-#     """
-#     def __init__(self, degrees=15):
-#         super().__init__()
-#         self.rotation = transforms.RandomRotation(
-#             degrees=(-degrees, degrees),
-#             interpolation=InterpolationMode.BILINEAR # Can also 'BICUBIC'
-#         )
-#     def forward(self, img):
-        
-#         if isinstance(img, list):
-#             # Rotate each crop separately
-#             return [self.rotation(crop) for crop in img]
-#         else:
-#             return self.rotation(img)
+
+# rotator for inversion
+class FixedRotator(torch.nn.Module):
+    """
+    Rotates image or crops by a fixed angle (default: 180°) for inversion.
+    """
+    def __init__(self, angle=180):
+        super().__init__()
+        self.angle = angle
+
+    def forward(self, img):
+        if isinstance(img, list):
+            return [TF.rotate(crop, self.angle) for crop in img]
+        else:
+            return TF.rotate(img, self.angle)
 
 class Foveater(torch.nn.Module):
     """
@@ -102,7 +121,7 @@ class LogPolarTransformer(torch.nn.Module):
 # Build the Transformation Pipeline
 # ------------------------------------------------------------------------------
 
-def build_transform_pipeline(config):
+def build_transform_pipeline(config, inversion=None):
     """
     Builds a sequence of transformations based on given config.
     
@@ -120,7 +139,14 @@ def build_transform_pipeline(config):
         if transform_name == 'crop':
             transform_modules.append(RandomCropper(crop_scale=config['params']['crop_scale']))
         elif transform_name == 'rotate':
-            transform_modules.append(RandomRotator(degrees=config['params']['rotation_degrees']))
+            if inversion==True:
+                transform_modules.append(FixedRotator(angle=180))
+            elif inversion==False:
+                transform_modules.append(FixedRotator(angle=0))
+            else:
+                transform_modules.append(RandomRotator(degrees=config['params']['rotation_degrees']))
+        
+            #transform_modules.append(RandomRotator(degrees=config['params']['rotation_degrees']))
         elif transform_name == 'foveation':
             transform_modules.append(Foveater(
                 crop_size=config['params']['crop_size'],
