@@ -9,8 +9,8 @@ print("Environment Initialized")
 
 # Default dataset name and identity counts for 'faces'
 DEFAULT_DATASET = "faces"
-# IDENTITY_COUNTS = [4, 8, 16, 32, 64, 128]
-IDENTITY_COUNTS = [4, 8]
+IDENTITY_COUNTS = [4, 8, 16, 32, 64, 128]
+# IDENTITY_COUNTS = [4, 8]
 
 def process_dataset(
     dataset: str = DEFAULT_DATASET,
