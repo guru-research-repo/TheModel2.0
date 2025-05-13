@@ -19,7 +19,8 @@ def main():
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
-    num_gpu         = 1
+    idx_gpu         = 0   # The index of GPU that this task is about to run on
+    # num_gpu         = 1
     num_workers     = 4
 
     # ------------------------------------------------------------------------
@@ -46,17 +47,22 @@ def main():
     history         = []
     batch_size      = 64
     lr              = 1e-3
-    device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
 
     model = Model()
+    
+    model = model.to(device)
+
+    print(f"→ Model running on {device}")
 
  # --- multi‑GPU wrap ---
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        n_gpu = min(num_gpu, torch.cuda.device_count())
-        print(f"→ Using {n_gpu} GPUs")
-        model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
+    # if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+    #     n_gpu = min(num_gpu, torch.cuda.device_count())
+    #     print(f"→ Using {n_gpu} GPUs")
+    #     model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
 
-    model = model.to(device)
+    # model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.CrossEntropyLoss()
