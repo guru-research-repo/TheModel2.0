@@ -1,3 +1,4 @@
+import datetime
 import os
 import pandas as pd
 from utils import *
@@ -173,8 +174,12 @@ def main():
                 "test_std":    test_std,
             })
 
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
     df = pd.DataFrame(history)
-    df.to_csv("output/training_history.csv", index=False)
+    df.to_csv(f"output/training_history_{ts}.csv", index=False)
+
+    torch.save(model.state_dict(), f"output/resnet18_{ts}.pth")
 
 if __name__ == "__main__":
     main()
