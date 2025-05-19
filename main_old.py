@@ -47,8 +47,6 @@ def main():
     history         = []
     batch_size      = 64
     lr              = 1e-3
-    hidden_neurons  = 100
-    num_iter        = 1
     # device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
 
