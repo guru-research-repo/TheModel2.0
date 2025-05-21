@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision.models import resnet18, ResNet18_Weights
 
 class Model(torch.nn.Module):
-    def __init__(self, num_classes=128, pretrained=False, hidden_neurons=100, num_iter=1):
+    def __init__(self, num_classes=128, pretrained=False, hidden_neurons=100, num_iter=1, dropout=0.25):
         super(Model, self).__init__()
 
         weights = ResNet18_Weights.IMAGENET1K_V2 if pretrained else None
@@ -14,7 +14,7 @@ class Model(torch.nn.Module):
         self.avgpool = nn.AvgPool2d(kernel_size=6, stride=1, padding=0)
         self.fc1 = nn.Linear(512, 256)
         self.fc2 = nn.Linear(256 ,num_classes)
-        self.attractor = Attractor(hidden_neurons=hidden_neurons, N=num_iter)
+        self.attractor = Attractor(hidden_neurons=hidden_neurons, N=num_iter, dropout=dropout)
 
     def forward(self, x):
         x = self.model(x)
@@ -38,7 +38,7 @@ class Model(torch.nn.Module):
 
 
 class Attractor(nn.Module):
-    def __init__(self, N=1, hidden_neurons=100):
+    def __init__(self, N=1, hidden_neurons=100, dropout=0.25):
         super(Attractor, self).__init__()
         
         self.skip = nn.Linear(512, 512)
@@ -46,6 +46,7 @@ class Attractor(nn.Module):
         self.up   = nn.Linear(hidden_neurons, 512)
         self.activation = nn.Tanh()
         self.N = N
+        self.dropout = nn.Dropout(dropout)
     
     def flow(self, x):
         x_skip = self.skip(x)
@@ -54,6 +55,7 @@ class Attractor(nn.Module):
         return x
     
     def forward(self, x):
+        x = self.dropout(x)
         for _ in range(self.N):
             x = self.flow(x)
         return x
