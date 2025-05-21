@@ -1,5 +1,11 @@
 # TheModel2.0
 
+## This branch changes:
+Real time transformation
+trans.py instead of transformation.py
+main2.py instead of main.py
+data_preprocess.py exits after the first image (just to produce sample visualizations)
+
 ## Getting Started
 Steps to run the project:
 

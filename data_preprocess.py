@@ -2,8 +2,10 @@ import sys
 from pathlib import Path
 from PIL import Image
 import torchvision.transforms.functional as TF
+import matplotlib.pyplot as plt
 
 from transformation import *
+from trans import Pipeline
 
 print("Environment Initialized")
 
@@ -32,6 +34,9 @@ def process_dataset(
 
     Outputs mirror input structure inside `processed_dir`.
     """
+    batch_size = 64
+    pipeline = Pipeline('train', logpolar=True)
+    
     root = Path(root_dir).expanduser()
     dest = Path(processed_dir).expanduser()
 
@@ -72,22 +77,21 @@ def process_dataset(
                         continue
 
                     # Convert to tensor and get four random crops
-                    tensor_img = TF.to_tensor(img)
-                    crops = four_random_crops(tensor_img)
-
-                    for i, tensor in enumerate(crops):
-                        # rotate: 180° for test, random ±15° otherwise
-                        tensor = rotate(tensor, inverse=(split == "test"))
-                        # foveation
-                        tensor = foveation(tensor)
-                        # log-polar transform
-                        C, H, W = tensor.shape
-                        tensor = logpolar_manual(tensor, (H, W), (H, W))
-
+                    # tensor_img = TF.to_tensor(img)
+                    plt.imshow(img)
+                    plt.show()
+                    transformed = pipeline(img)
+                    
+                    for i, img in enumerate(transformed):    
                         # Save
-                        out_img = TF.to_pil_image(tensor.clamp(0, 1))
+                        out_img = TF.to_pil_image(img.clamp(0, 1))
                         filename = f"{img_file.stem}_proc{i}.png"
                         out_img.save(out_label / filename)
+                    break
+                break
+            break
+        break
+    
 
 
 if __name__ == "__main__":

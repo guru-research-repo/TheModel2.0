@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Ensure numeric types
-df = pd.read_csv('output/training_history_20250514_203140.csv').apply(pd.to_numeric, errors='coerce')
+df = pd.read_csv('aggregated_metrics_per_epoch.csv').apply(pd.to_numeric, errors='coerce')
 
 # Extract data
 epochs = df['epoch'].values
@@ -18,10 +18,10 @@ fig, ax = plt.subplots()
 
 # Plot mean lines
 ax.plot(epochs, train, label='Train', color='tab:blue')
-ax.plot(epochs, valid, label='Valid', color='tab:orange')
-ax.plot(epochs, test, label='Test', color='tab:green')
+ax.plot(epochs, valid, label='Upright', color='tab:orange')
+ax.plot(epochs, test, label='Inverted', color='tab:green')
 
-# Shade ±1 std deviation
+# Shade Â±1 std deviation
 ax.fill_between(epochs, train - train_std, train + train_std,
                 color='tab:blue', alpha=0.2)
 ax.fill_between(epochs, valid - valid_std, valid + valid_std,
@@ -32,9 +32,10 @@ ax.fill_between(epochs, test - test_std, test + test_std,
 # Labels and legend
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Accuracy')
-ax.set_title('Accuracy per Epoch with Standard Deviation Shading')
+ax.set_title('Result: LP in 5 runs')
 ax.legend()
 ax.grid(True)
 
 plt.show()
+
 # %%

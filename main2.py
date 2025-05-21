@@ -1,14 +1,16 @@
 import os
 import pandas as pd
+import datetime
 from utils import *
 from transformation import *
 from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from Datasets import *
+from trans import Pipeline
 
 
-def main():
+def main(lp = True):
     os.makedirs("output", exist_ok=True)
     # ------------------------------------------------------------------------
     # Configuration
@@ -43,11 +45,17 @@ def main():
 
     # Hyper‑parameters
     history         = []
-    batch_size      = 16
+    batch_size      = 64
     lr              = 1e-3
     device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    n_crops         = 4
 
-    model = Model(size=224)
+    model = Model(size=180)
+
+    trainPipeline = Pipeline('train', logpolar=lp, device=device, n_crops=n_crops, crop_size=180)
+    valPipeline = Pipeline(None, logpolar=lp, device=device, n_crops=n_crops, crop_size=180)
+    testPipeline = Pipeline('inverted', logpolar=lp, device=device, n_crops=n_crops, crop_size=180)
+
 
  # --- multi‑GPU wrap ---
     if torch.cuda.is_available() and torch.cuda.device_count() > 1:
@@ -67,7 +75,7 @@ def main():
         # 2) re-create loaders for this identity
         train_loader = DataLoader(
             all_datasets[ident]["train"],
-            batch_size=batch_size,
+            batch_size=batch_size // n_crops,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=True
@@ -80,7 +88,7 @@ def main():
             pin_memory=True
         )
         test_loader  = DataLoader(
-            all_datasets[ident]["test"],
+            all_datasets[ident]["valid"],
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
@@ -106,7 +114,10 @@ def main():
                 label_ids = labels.argmax(dim=1)
             else:
                 label_ids = labels
+            label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
 
+            inputs = trainPipeline(inputs)
+                        
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, label_ids)
@@ -137,6 +148,10 @@ def main():
             for inputs, labels in valid_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                
+                # transform input data
+                inputs = valPipeline(inputs)
                 outputs = model(inputs)
                 preds = outputs.argmax(dim=1)
                 batch_acc = (preds == label_ids).float().mean().item()
@@ -153,6 +168,10 @@ def main():
             for inputs, labels in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                
+                # transform input data
+                inputs = testPipeline(inputs)
                 outputs = model(inputs)
                 preds = outputs.argmax(dim=1)
                 batch_acc = (preds == label_ids).float().mean().item()
@@ -173,8 +192,18 @@ def main():
                 "test_std":    test_std,
             })
 
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
     df = pd.DataFrame(history)
-    df.to_csv("output/training_history.csv", index=False)
+    df.to_csv(f"output/training_history_{'lp' if lp else 'cnn'}_{ts}.csv", index=False)
+
+    torch.save(model.state_dict(), f"output/resnet18_{'lp' if lp else 'cnn'}_{ts}.pth")
 
 if __name__ == "__main__":
-    main()
+    for i in range(5):
+        print(f"starting CNN {i}...")
+        main(lp=False)
+
+    for i in range(5):
+        print(f"starting LP {i}...")
+        main(lp=True)
