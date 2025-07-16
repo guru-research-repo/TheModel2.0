@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 import torchvision.transforms.functional as TF
 from utils import get_label_mapping, label_to_one_hot
 from pathlib import Path
@@ -11,6 +12,8 @@ def load_dataset(dataset, identity=4, task="train"):
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
         ds = CelebrityFacesDataset(root_dir="processed_data", num_identities=identity, split=task)
+    elif dataset == "objects":
+        ds = ImageNetObjectsDataset(root_dir="processed_data", num_classes=identity, split=task)
     return ds
 
 class CelebAFaceIDDataset(Dataset):
@@ -45,14 +48,14 @@ class CelebAFaceIDDataset(Dataset):
 
     def __len__(self):
         return len(self.samples)
-
+    
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
         img = TF.to_tensor(img)
         label = torch.tensor(label, dtype=torch.long)
         return img, label
-
+    
 class CelebrityFacesDataset(Dataset):
     def __init__(self, root_dir: str, num_identities: int, split: str):
         """
@@ -92,7 +95,7 @@ class CelebrityFacesDataset(Dataset):
 
     def __len__(self):
         return len(self.samples)
-
+    
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
@@ -101,3 +104,33 @@ class CelebrityFacesDataset(Dataset):
         # label = torch.tensor(int(label), dtype=torch.long)
         return img, label
 
+class ImageNetObjectsDataset(Dataset):
+    def __init__(self, root_dir: str, num_classes: int, split: str):
+        """
+        Args:
+            root_dir (str): path to "processed_data"
+            num_classes (int): number of object classes (4, 8, ..., 128)
+            split (str): one of "train", "valid", or "test"
+        """
+        self.samples = []
+        self.data_dir = Path(root_dir) / "ImageNet_objects" / f"{num_classes}_objects" / split
+        if not self.data_dir.is_dir():
+            raise FileNotFoundError(f"Could not find data directory: {self.data_dir}")
+
+        self.classes = sorted([d.name for d in self.data_dir.iterdir() if d.is_dir()])
+        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
+
+        for class_name in self.classes:
+            img_dir = self.data_dir / class_name
+            for img_path in img_dir.glob("*.png"):
+                self.samples.append((img_path, self.class_to_idx[class_name]))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert("RGB")
+        img = TF.to_tensor(img)
+        label = torch.tensor(label, dtype=torch.long)
+        return img, label

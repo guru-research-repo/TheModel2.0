@@ -2,7 +2,8 @@ import os
 import pandas as pd
 from utils import *
 from transformation import *
-from model import *
+#from model import *
+from resnet18_model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from Datasets import *
@@ -13,7 +14,7 @@ def main():
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
-    dataset_name    = "faces"
+    dataset_name    = "objects" #"faces"
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
