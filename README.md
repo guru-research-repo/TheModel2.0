@@ -1,5 +1,9 @@
 # TheModel2.0
 
+## New on this branch
+1. Run `python download.py` to download objects data.
+2. Run `python imagenet_preprocess.py` to create pre-processed objects data on local disk.
+
 ## Getting Started
 Steps to run the project:
 
