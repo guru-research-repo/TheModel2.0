@@ -104,6 +104,7 @@ def apply_transformations(dataset: str = DEFAULT_DATASET,
                 for img_file in image_dir.glob("*.*"):
                     try:
                         img = Image.open(img_file).convert("RGB")
+                        img = TF.resize(img, size=(256, 256))
                         tensor_img = TF.to_tensor(img)
                         crops = four_random_crops(tensor_img)
 
