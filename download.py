@@ -13,12 +13,14 @@ except ImportError:
 urls = [
     "https://drive.google.com/file/d/1mFpBO1-XCgDOCQV01x92F3-I2hKVTuP1/view?usp=drive_link",  # CelebA
     "https://drive.google.com/file/d/1ud4OdpoWjULhqJQV50WZ9YF8dfHiIfo9/view?usp=drive_link",  # faces
+    "https://drive.google.com/file/d/1j-j4k3Em9ZeQjGGk5O0AIT19PXhOueYe/view?usp=drive_link",  # dogs
 ]
 
 # Desired filenames (match the original file types)
 filenames = [
     "CelebA_HQ_facial_identity_dataset.zip",
     "faces.tar.gz",
+    "dogs.zip"
 ]
 
 output_dir = "data"
@@ -50,5 +52,10 @@ with tarfile.open('data/faces.tar.gz', 'r:gz') as tar_ref:
     curr_path = "data/faces"
     os.makedirs(curr_path, exist_ok=True)
     tar_ref.extractall(path=curr_path)
+
+with zipfile.ZipFile('data/dogs.zip', 'r') as zip_ref:
+    curr_path = "data/dogs"
+    os.makedirs(curr_path, exist_ok=True)
+    zip_ref.extractall(path=curr_path)
 
 print("Extraction completed.")

@@ -29,3 +29,11 @@ Steps to run the project:
 
 *Note*: main_ddp.py is used to rapidly train a model with multiple GPU, the epoch accuracy only reflects the average accuracy of one GPU, not the whole batch. <br>
 *Note*: main_ddp_test.py updates batch accuracy among GPUs, but significantly impedes the training speed. This method is not recommended to use.
+
+## Running and plotting
+
+1. run `CUDA_VISIBLE_DEVICES=n python main2.py`
+2. Once done, move the .csv outputs from `/output` to `/visualization` 
+- only do one type of output at a time (LP or CNN)
+3. `python foo.py` to aggregate data
+4. `python plot.py` to plot it

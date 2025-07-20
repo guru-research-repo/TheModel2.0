@@ -10,12 +10,12 @@ from Datasets import *
 from trans import Pipeline
 
 
-def main(lp = True):
+def main(lp = True, dataset_name: str = "faces"):
     os.makedirs("output", exist_ok=True)
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
-    dataset_name    = "faces"
+    dataset_name    = dataset_name
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train", "valid", "test"]
     total_epochs    = 240
@@ -200,10 +200,11 @@ def main(lp = True):
     torch.save(model.state_dict(), f"output/resnet18_{'lp' if lp else 'cnn'}_{ts}.pth")
 
 if __name__ == "__main__":
+    # main(lp=True)
     for i in range(5):
         print(f"starting CNN {i}...")
-        main(lp=False)
+        main(lp=False, dataset_name="faces")
 
     for i in range(5):
         print(f"starting LP {i}...")
-        main(lp=True)
+        main(lp=True, dataset_name="faces")

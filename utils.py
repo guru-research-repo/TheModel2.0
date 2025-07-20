@@ -77,9 +77,9 @@ def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
     plt.tight_layout()
     plt.show()
 
-def get_label_mapping(root_dir="data", num_identities=128, split="test"):
+def get_label_mapping(root_dir="data", num_identities=128, split="test", type="faces"):
     """
-    Scan "<root_dir>/faces/faces/{num_identities}_identities/{split}"
+    Scan "<root_dir>/{type}/{type}/{num_identities}_identities/{split}"
     and return a dict mapping each class-name (folder name) to a unique index.
 
     Args:
@@ -91,8 +91,8 @@ def get_label_mapping(root_dir="data", num_identities=128, split="test"):
     """
     data_dir = os.path.join(
         root_dir,
-        "faces",
-        "faces",
+        type,
+        type,
         f"{num_identities}_identities",
         split
     )

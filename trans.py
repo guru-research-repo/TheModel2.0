@@ -390,6 +390,7 @@ class Pipeline(torch.nn.Module):
     def forward(self, data):
         if not isinstance(data, torch.Tensor): 
             data = self.tensorize(data)
+            data = data.unsqueeze(0)
         # print(data.shape)
         out = self.compose(data)
         # img = out[0]

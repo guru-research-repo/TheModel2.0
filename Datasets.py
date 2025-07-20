@@ -10,7 +10,9 @@ def load_dataset(dataset, identity=4, task="train"):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task)
+        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type="faces")
+    elif dataset == "dogs":
+        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type="dogs")
     return ds
 
 class CelebAFaceIDDataset(Dataset):
@@ -54,18 +56,19 @@ class CelebAFaceIDDataset(Dataset):
         return img, label
 
 class CelebrityFacesDataset(Dataset):
-    def __init__(self, root_dir: str, num_identities: int, split: str):
+    def __init__(self, root_dir: str, num_identities: int, split: str, type: str):
         """
         Args:
             root_dir (str): path to "/dataset"
             num_identities (int): 4, 8, …, 128
             split (str): one of "train", "valid", "test"
+            type (str): "faces" or "dogs"
         """
         # build the path to e.g. "/dataset/faces/faces/8_identities/train"
         self.data_dir = os.path.join(
             root_dir, 
-            "faces", 
-            "faces", 
+            type, 
+            type, 
             f"{num_identities}_identities", 
             split
         )
@@ -78,7 +81,7 @@ class CelebrityFacesDataset(Dataset):
             if os.path.isdir(os.path.join(self.data_dir, d))
         )
 
-        self.map = get_label_mapping()
+        self.map = get_label_mapping(type=type)
 
         # collect (image_path, label) tuples
         self.samples = []
