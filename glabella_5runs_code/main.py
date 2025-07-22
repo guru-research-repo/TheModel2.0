@@ -2,7 +2,7 @@ import datetime
 import os
 import pandas as pd
 from utils import *
-from transformation import *
+from transformation_glabella import *
 from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -18,8 +18,8 @@ def run_single_training(run_id):
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train_upright", "valid_upright", "valid_inverted"]
     # splits          = ["train", "valid", "test"]
-    total_epochs    = 240
-    epoch_block     = 40  # how many epochs per identity
+    total_epochs    = 6
+    epoch_block     = 1  # how many epochs per identity ########################################### make it 40
     idx_gpu         = 0   # The index of GPU that this task is about to run on
     num_gpu         = 1
     num_workers     = 4
@@ -34,6 +34,7 @@ def run_single_training(run_id):
                 for split in splits }
         for ident in identity_counts
     }
+    
 
     # ------------------------------------------------------------------------
     # 2) Helper to map an epoch → identity
@@ -72,9 +73,15 @@ def run_single_training(run_id):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.CrossEntropyLoss()
 
+    
+
     for epoch in range(1, total_epochs + 1):
         # 1) figure out which identity we're on
         ident = identity_for_epoch(epoch)
+
+        print(f"[Epoch {epoch}] Identity: {ident} | #Train Samples: {len(all_datasets[ident]['train_upright'])}")
+        print(f"[Epoch {epoch}] Identity: {ident} | #Valid UP Samples: {len(all_datasets[ident]['valid_upright'])}")
+        print(f"[Epoch {epoch}] Identity: {ident} | #Valid INV Samples: {len(all_datasets[ident]['valid_inverted'])}")
 
         # 2) re-create loaders for this identity
         train_loader = DataLoader(
@@ -193,14 +200,14 @@ def run_single_training(run_id):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     df = pd.DataFrame(history)
-    df.to_csv(f"on_val_glabella_cleaned/training_history_{ts}.csv", index=False)
+    df.to_csv(f"faces_glabella_LPNet_results/training_history_{ts}.csv", index=False)
 
-    torch.save(model.state_dict(), f"on_val_glabella_cleaned/resnet18_{ts}.pth")
+    torch.save(model.state_dict(), f"faces_glabella_LPNet_results/resnet18_{ts}.pth")
     #####################################################################################################
     return history
 
 def main():
-    os.makedirs("on_val_glabella_cleaned", exist_ok=True)
+    os.makedirs("faces_glabella_LPNet_results", exist_ok=True)
 
     all_runs = []
     for run in range(1, 6):
@@ -211,14 +218,14 @@ def main():
         all_runs.extend(run_history)
 
     df_all = pd.DataFrame(all_runs)
-    df_all.to_csv("on_val_glabella_cleaned/training_history_5runs.csv", index=False)
+    df_all.to_csv("faces_glabella_LPNet_results/training_history_5runs.csv", index=False)
 
     summary = df_all.groupby("epoch").agg({
         "train_mean": ["mean", "std"],
         "valid_mean": ["mean", "std"],
         "test_mean": ["mean", "std"]
     })
-    summary.to_csv("on_val_glabella_cleaned/training_summary_avg_std.csv")
+    summary.to_csv("faces_glabella_LPNet_results/training_summary_avg_std.csv")
     ########################################################################################################
 
 if __name__ == "__main__":

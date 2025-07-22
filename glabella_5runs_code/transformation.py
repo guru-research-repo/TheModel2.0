@@ -20,6 +20,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import numpy as np
+import mediapipe as mp        
 
 def four_random_crops(img: torch.Tensor, crop_scale: float = 0.65) -> list[torch.Tensor]:
     """
@@ -62,10 +63,6 @@ def rotate(
         data (torch.Tensor): Input image of shape (C, H, W) or batch (N, C, H, W).
         max_deg (float): Maximum absolute rotation angle (±max_deg).
         inverse (bool): If True, rotate by exactly 180° instead of a random angle.
-        0: Rotate randomly in [-max_deg, max_deg]
-        1: Rotate by 180°
-        2: Rotate by 0°
-        3: Rotate randomly in [-15, 15] regardless of max_deg
 
     Returns:
         torch.Tensor: Rotated image(s), same shape as input.
@@ -87,7 +84,7 @@ def rotate(
 
     # Use bilinear interpolation for smooth rotations
     interp = T.InterpolationMode.BILINEAR
-
+    
     # Single image
     if data.ndim == 3:  # (C, H, W)
         return TF.rotate(data, angle, interpolation=interp)
@@ -101,6 +98,7 @@ def rotate(
 
     else:
         raise ValueError(f"rotate() expected a 3D or 4D tensor, got shape {data.shape}")
+
 
 def foveation(img: torch.Tensor, crop_size: int = 224):
     """
@@ -181,6 +179,7 @@ def foveation(img: torch.Tensor, crop_size: int = 224):
         im_fov = (Ms.unsqueeze(1) * As).sum(dim=0)
         return im_fov
 
+    # print("center in foveate ", center) # w,h --> x,y
     # handle batch vs single image
     if img.ndim == 4:
         out = [foveat_img(img[i], [(crop_size/2, crop_size/2)]) for i in range(img.shape[0])]
@@ -290,6 +289,12 @@ def logpolar_manual(
 
     H_in, W_in = input_shape
     H_out, W_out = output_shape
+
+    # cy, cx = center
+
+    # print("center in logpolar ", center)
+    # print("cy = ", cy)
+    # print("cx = ", cx)
 
     # 1) choose center
     if center is None:

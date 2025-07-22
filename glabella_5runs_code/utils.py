@@ -77,7 +77,7 @@ def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
     plt.tight_layout()
     plt.show()
 
-def get_label_mapping(root_dir="../kira/cleaned_glabella_processed_data", num_identities=128, split="valid_inverted"): # was data
+def get_label_mapping(root_dir="glabella_processed_data", num_identities=128, split="valid_inverted"): # was data
     """
     Scan "<root_dir>/faces/faces/{num_identities}_identities/{split}"
     and return a dict mapping each class-name (folder name) to a unique index.

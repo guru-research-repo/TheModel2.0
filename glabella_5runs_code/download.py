@@ -11,17 +11,21 @@ except ImportError:
 
 # The shared-view URLs
 urls = [
-    "https://drive.google.com/file/d/1mFpBO1-XCgDOCQV01x92F3-I2hKVTuP1/view?usp=drive_link",  # CelebA
-    "https://drive.google.com/file/d/1ud4OdpoWjULhqJQV50WZ9YF8dfHiIfo9/view?usp=drive_link",  # faces
+    # "https://drive.google.com/file/d/1mFpBO1-XCgDOCQV01x92F3-I2hKVTuP1/view?usp=drive_link",  # CelebA
+    # "https://drive.google.com/file/d/1ud4OdpoWjULhqJQV50WZ9YF8dfHiIfo9/view?usp=drive_link",  # faces
+    # "https://drive.google.com/file/d/1JfBUCpKTIAm6_P_VPiPFT9xcP1b-P8e5/view?usp=sharing" #Cars dataset
+    "https://drive.google.com/file/d/1q2xklkTf_x4h_28ZvcRIqd5f3kNJKBlt/view?usp=sharing" #cleaned faces dataset by Kira
 ]
 
 # Desired filenames (match the original file types)
 filenames = [
-    "CelebA_HQ_facial_identity_dataset.zip",
-    "faces.tar.gz",
+    # "CelebA_HQ_facial_identity_dataset.zip",
+    # "faces.tar.gz",
+    # "Cars_Dataset.zip",
+    "cleaned_faces_dataset.zip"
 ]
 
-output_dir = "data"
+output_dir = "cleaned_faces"
 os.makedirs(output_dir, exist_ok=True)
 
 for url, name in zip(urls, filenames):
@@ -39,16 +43,22 @@ print("Extracting files:")
 import zipfile
 import tarfile
 
-# Extract CelebA_HQ_facial_identity_dataset.zip
-with zipfile.ZipFile('data/CelebA_HQ_facial_identity_dataset.zip', 'r') as zip_ref:
-    curr_path = "data/CelebA_HQ_facial_identity_dataset"
+# # Extract CelebA_HQ_facial_identity_dataset.zip
+# with zipfile.ZipFile('data/CelebA_HQ_facial_identity_dataset.zip', 'r') as zip_ref:
+#     curr_path = "data/CelebA_HQ_facial_identity_dataset"
+#     os.makedirs(curr_path, exist_ok=True)
+#     zip_ref.extractall(path=curr_path)
+
+# # Extract faces.tar.gz
+# with tarfile.open('data/faces.tar.gz', 'r:gz') as tar_ref:
+#     curr_path = "data/faces"
+#     os.makedirs(curr_path, exist_ok=True)
+#     tar_ref.extractall(path=curr_path)
+
+# Extract Cars_Dataset.zip
+with zipfile.ZipFile('cleaned_faces/cleaned_faces_dataset.zip', 'r') as zip_ref:
+    curr_path = "cleaned_faces/faces"
     os.makedirs(curr_path, exist_ok=True)
     zip_ref.extractall(path=curr_path)
-
-# Extract faces.tar.gz
-with tarfile.open('data/faces.tar.gz', 'r:gz') as tar_ref:
-    curr_path = "data/faces"
-    os.makedirs(curr_path, exist_ok=True)
-    tar_ref.extractall(path=curr_path)
 
 print("Extraction completed.")

@@ -6,11 +6,13 @@ from pathlib import Path
 from PIL import Image
 from torch.utils.data import Dataset
 
-def load_dataset(dataset, identity=4, task="train"):
+def load_dataset(dataset, identity=4, task="train_upright", label_mapping=None):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="processed_data", num_identities=identity, split=task)
+        ds = CelebrityFacesDataset(root_dir="glabella_processed_data", num_identities=identity, split=task) # label_mapping = label_mapping
+    elif dataset == "cars":
+        ds = CelebrityCarsDataset(root_dir="cars_CNN_data", num_identities=identity, split=task) 
     return ds
 
 class CelebAFaceIDDataset(Dataset):
@@ -54,7 +56,7 @@ class CelebAFaceIDDataset(Dataset):
         return img, label
 
 class CelebrityFacesDataset(Dataset):
-    def __init__(self, root_dir: str, num_identities: int, split: str):
+    def __init__(self, root_dir: str, num_identities: int, split: str): #, label_mapping: dict
         """
         Args:
             root_dir (str): path to "/dataset"
@@ -78,6 +80,8 @@ class CelebrityFacesDataset(Dataset):
             if os.path.isdir(os.path.join(self.data_dir, d))
         )
 
+        # self.map = label_mapping
+
         self.map = get_label_mapping()
 
         # collect (image_path, label) tuples
@@ -97,7 +101,61 @@ class CelebrityFacesDataset(Dataset):
         img_path, label = self.samples[idx]
         img = Image.open(img_path).convert("RGB")
         img = TF.to_tensor(img)
+        # print(f"[Dataset] File BEFORE one-hot: {img_path} | Label str: {label}")
         label = label_to_one_hot(label, self.map)
         # label = torch.tensor(int(label), dtype=torch.long)
+        # print(f"[Dataset] File AFTER one-hot: {img_path} | Label str: {label}")
+        return img, label
+
+class CelebrityCarsDataset(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str): #, label_mapping: dict
+        """
+        Args:
+            root_dir (str): path to "/dataset"
+            num_identities (int): 4, 8, …, 128
+            split (str): one of "train", "valid", "test"
+        """
+        # build the path to e.g. "/dataset/faces/faces/8_identities/train"
+        self.data_dir = os.path.join(
+            root_dir, 
+            "Cars_Dataset", 
+            "Cars_Dataset", 
+            f"{num_identities}_car_models", 
+            split
+        )
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+        # list all celebrity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        # self.map = label_mapping
+
+        self.map = get_label_mapping()
+
+        # collect (image_path, label) tuples
+        self.samples = []
+        for celeb in self.classes:
+            celeb_dir = os.path.join(self.data_dir, celeb)
+            for fname in sorted(os.listdir(celeb_dir)):
+                if fname.lower().endswith(".png"):
+                    img_path = os.path.join(celeb_dir, fname)
+                    # here label is the celebrity name (string)
+                    self.samples.append((img_path, celeb))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert("RGB")
+        img = TF.to_tensor(img)
+        # print(f"[Dataset] File BEFORE one-hot: {img_path} | Label str: {label}")
+        label = label_to_one_hot(label, self.map)
+        # label = torch.tensor(int(label), dtype=torch.long)
+        # print(f"[Dataset] File AFTER one-hot: {img_path} | Label str: {label}")
         return img, label
 

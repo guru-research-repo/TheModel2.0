@@ -2,7 +2,6 @@ import sys
 from pathlib import Path
 from PIL import Image
 import torchvision.transforms.functional as TF
-from transformation import *
 from transformation_glabella import *
 
 print("Environment Initialized")
@@ -35,8 +34,8 @@ IDENTITY_COUNTS = [4, 8, 16, 32, 64, 128]
 
 def process_dataset(
     dataset: str = DEFAULT_DATASET,
-    root_dir: str = "cleaned_faces/cleaned_faces",
-    processed_dir: str = "ya"
+    root_dir: str = "cleaned_faces",
+    processed_dir: str = "glabella_processed_data"
 ):
     """
     Processes images under `root_dir` into `processed_dir`:
@@ -179,7 +178,7 @@ def tensor_to_bgr(tensor: torch.Tensor) -> np.ndarray:
     return cv2.cvtColor((img_np * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
 
 if __name__ == "__main__":
-    Path(processed_dir:="ya").mkdir(exist_ok=True)
+    Path(processed_dir:="glabella_processed_data").mkdir(exist_ok=True)
     if len(sys.argv) > 1:
         process_dataset(sys.argv[1])
     else:
