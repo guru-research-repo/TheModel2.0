@@ -14,7 +14,7 @@ class Model(torch.nn.Module):
         # self.resnet_model = torchvision.models.resnet50(pretrained = False)
         self.model = torch.nn.Sequential(*(list(self.resnet_model.children())[:-2]))
         self.avgpool = nn.AvgPool2d(kernel_size=6, stride=1, padding=0)
-        self.fc1 = nn.Linear(512, 256)
+        self.fc1 = nn.Linear(2048, 256)
         self.fc2 = nn.Linear(256, num_classes)
 
     def forward(self, x):
