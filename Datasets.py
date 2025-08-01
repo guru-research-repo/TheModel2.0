@@ -10,9 +10,9 @@ def load_dataset(dataset, identity=4, task="train"):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type="faces")
-    elif dataset == "dogs":
-        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type="dogs")
+        ds = CelebrityFacesDataset(root_dir="data/cleaned_faces_dataset/data", num_identities=identity, split=task, type="faces")
+    else:
+        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds
 
 class CelebAFaceIDDataset(Dataset):
@@ -88,7 +88,7 @@ class CelebrityFacesDataset(Dataset):
         for celeb in self.classes:
             celeb_dir = os.path.join(self.data_dir, celeb)
             for fname in sorted(os.listdir(celeb_dir)):
-                if fname.lower().endswith(".jpg"):
+                if fname.lower().endswith(".jpg") or fname.lower().endswith(".jpeg"):
                     img_path = os.path.join(celeb_dir, fname)
                     # here label is the celebrity name (string)
                     self.samples.append((img_path, celeb))

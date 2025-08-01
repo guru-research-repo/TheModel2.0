@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18, ResNet18_Weights
+from torchvision.models import resnet18, ResNet18_Weights, resnet50
 
 
 class Model(torch.nn.Module):
@@ -14,7 +14,7 @@ class Model(torch.nn.Module):
         else:
             self.in_size = 512
 
-        weights = ResNet18_Weights.IMAGENET1K_V2 if pretrained else None
+        weights = ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
 
         self.resnet_model = resnet18(weights=weights)
 
