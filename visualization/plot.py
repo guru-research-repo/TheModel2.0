@@ -32,9 +32,11 @@ ax.fill_between(epochs, test - test_std, test + test_std,
 # Labels and legend
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Accuracy')
-ax.set_title('Result: LP in 5 runs')
+ax.set_title('Result: CNN in 5 runs')
 ax.legend()
 ax.grid(True)
+
+plt.savefig('cnn_faces.png')
 
 plt.show()
 

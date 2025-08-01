@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import datetime
 from utils import *
-from transformation import *
 from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -202,9 +201,9 @@ def main(lp = True, dataset_name: str = "faces"):
 if __name__ == "__main__":
     # main(lp=True)
     for i in range(5):
-        print(f"starting CNN {i}...")
-        main(lp=False, dataset_name="faces")
-
-    for i in range(5):
         print(f"starting LP {i}...")
         main(lp=True, dataset_name="faces")
+
+    for i in range(5):
+        print(f"starting CNN {i}...")
+        main(lp=False, dataset_name="faces")
