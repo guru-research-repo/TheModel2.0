@@ -124,3 +124,28 @@ def label_to_one_hot(label, mapping):
     # create one-hot and cast to float
     return F.one_hot(torch.tensor(idx, dtype=torch.long),
                      num_classes=num_classes).float()
+
+def weighted_mode(tensor, weights):
+    # Check if tensor and weights have the same shape
+    if tensor.shape != weights.shape:
+        raise ValueError("Tensor and weights must have the same shape.")
+    
+    # Initialize an empty list to store the modes for each row
+    modes = []
+    
+    for row, weight_row in zip(tensor, weights):
+        # Get unique values in the row
+        unique_values, unique_indices = torch.unique(row, return_inverse=True)
+        
+        # Create a weight sum for each unique value
+        weight_sums = torch.zeros_like(unique_values, dtype=torch.float)
+        for idx, unique_idx in enumerate(unique_indices):
+            weight_sums[unique_idx] += weight_row[idx]
+        
+        # Find the index of the unique value with the highest weight
+        mode_idx = torch.argmax(weight_sums)
+        
+        # Add the mode (value) to the list of modes
+        modes.append(unique_values[mode_idx].item())
+    
+    return modes

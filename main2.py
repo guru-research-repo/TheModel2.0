@@ -148,12 +148,18 @@ def main(lp = True, dataset_name: str = "faces"):
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
                 label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
-                
+                # print(label_ids.shape)
+                weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
+
                 # transform input data
                 inputs = valPipeline(inputs)
                 outputs = model(inputs)
                 preds = outputs.argmax(dim=1)
-                batch_acc = (preds == label_ids).float().mean().item()
+                # preds.shape = (B * N,), change to (B, N)
+                # get best overall choice out of group of crops/salience
+                newpreds = torch.tensor(weighted_mode(torch.reshape(preds, (-1, n_crops)), weights)).to(device)
+                
+                batch_acc = (newpreds == label_ids).float().mean().item()
                 valid_accs.append(batch_acc)
 
         valid_mean = np.mean(valid_accs)
@@ -168,12 +174,16 @@ def main(lp = True, dataset_name: str = "faces"):
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
                 label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
                 
                 # transform input data
                 inputs = testPipeline(inputs)
                 outputs = model(inputs)
                 preds = outputs.argmax(dim=1)
-                batch_acc = (preds == label_ids).float().mean().item()
+
+                # get best overall choice out of group of crops/salience
+                newpreds = torch.tensor(weighted_mode(torch.reshape(preds, (-1, n_crops)), weights)).to(device)
+                batch_acc = (newpreds == label_ids).float().mean().item()
                 test_accs.append(batch_acc)
 
         test_mean = np.mean(test_accs)
