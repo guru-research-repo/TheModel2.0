@@ -21,6 +21,35 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import numpy as np
 
+class Normalize(torch.nn.Module):
+    """
+    Given an image tensor, return a z-score normalized tensor.
+
+    Args:
+        n (int): Number of crops
+        crop_size: Output image shape.
+        data: input data tensor of size (B, C, W, H)
+
+    Returns:
+        torch.Tensor: Randomly cropped patches of shape (N, C, W, H)
+    """
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, data):
+        # normalize = T.Normalize(
+        #             mean = (0.485, 0.456, 0.406),
+        #             std = (0.229, 0.224, 0.225))
+        # normalizes over image, use dim=[2,3] to normalize per channel (seems to perform worse)
+        mean = data.mean(dim=[1,2,3], keepdim=True)
+        std = data.std(dim=[1,2,3], keepdim=True)
+        out = (data - mean) / (std + 1e-5)
+        # img = out[0]
+        # out_img = TF.to_pil_image(img.clamp(0, 1))
+        # filename = f"out/img_proc001.png"
+        # out_img.save(filename)
+        return out
+
 class RandomCrop(torch.nn.Module):
     """
     Given an image tensor, return a list of 4 random square-ish crops.
@@ -146,9 +175,9 @@ class Foveate(torch.nn.Module):
         As = self.pyramid(im, sigma, prNum)  # shape: (prNum, C, H, W)
         H, W = im.shape[-2:]
         # parameters
-        p = 7.5
-        k = 3
-        alpha = 2.5
+        p = 15 # 7.5 # low value makes more extreme 7 15 3.5
+        k = 1.1 # 3 higher value = higher resolution 2.5 1.1 3
+        alpha = 2.0 # 2.5 higher improves resolution, slower dropoff? 2.0 2.0 2.5/3
         # grid
         x = torch.arange(W, device=As.device).float()
         y = torch.arange(H, device=As.device).float()
@@ -346,11 +375,8 @@ class LogPolar(torch.nn.Module):
 class Pipeline(torch.nn.Module):
     def __init__(self, type = 'train', logpolar = False, device = 'cpu', 
                  n_crops = 4,
-                 normalize = T.Normalize(
-                    mean = (0.485, 0.456, 0.406),
-                    std = (0.229, 0.224, 0.225)),
-                crop_size = 180,
-                output_shape = (180,180)):
+                 crop_size = 180,
+                 output_shape = (180,180)):
         """
         Create transformation pipeline
         type = 'train', 'inverted', or None
@@ -376,15 +402,15 @@ class Pipeline(torch.nn.Module):
             self.foveate = torch.nn.Identity()
             self.logpolar = torch.nn.Identity()
         
-        self.normalize = normalize
+        self.normalize = Normalize()
         self.tensorize = T.ToTensor()
         
         self.compose = T.Compose([
+            self.normalize,
             self.crop,
             self.rotate,
             self.foveate,
             self.logpolar,
-            # self.normalize
         ])
 
     def forward(self, data):
