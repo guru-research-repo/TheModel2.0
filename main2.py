@@ -113,7 +113,7 @@ def main(lp = True, dataset_name: str = "faces"):
                 label_ids = labels.argmax(dim=1)
             else:
                 label_ids = labels
-            label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+            label_ids = label_ids.repeat(n_crops) #TODO: check if should be repeat_interleave # repeat because of cropping N times
 
             inputs = trainPipeline(inputs)
                         

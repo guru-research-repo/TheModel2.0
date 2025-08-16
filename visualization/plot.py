@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Ensure numeric types
-df = pd.read_csv('aggregated_metrics_per_epoch.csv').apply(pd.to_numeric, errors='coerce')
+df = pd.read_csv('sal_aggregated_metrics_per_epoch.csv').apply(pd.to_numeric, errors='coerce')
 
 # Extract data
 epochs = df['epoch'].values
@@ -32,11 +32,11 @@ ax.fill_between(epochs, test - test_std, test + test_std,
 # Labels and legend
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Accuracy')
-ax.set_title('Result: CNN in 5 runs')
+ax.set_title('4 Fixations on 4 Identities')
 ax.legend()
 ax.grid(True)
 
-plt.savefig('cnn_faces.png')
+plt.savefig('sal4_faces.png')
 
 plt.show()
 

@@ -1,4 +1,5 @@
-/data
-/processed_data
-/output
-/out
+data
+processed_data
+__pycache__
+output
+visualization/old

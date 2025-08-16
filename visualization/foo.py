@@ -41,6 +41,6 @@ agg_dict = {
 
 # 5) Convert to DataFrame and save
 agg_df = pd.DataFrame(agg_dict)
-agg_df.to_csv("aggregated_metrics_per_epoch.csv", index=False)
+agg_df.to_csv("sal_aggregated_metrics_per_epoch.csv", index=False)
 
-print("Saved per-epoch aggregates to 'aggregated_metrics_per_epoch.csv'")
+print("Saved per-epoch aggregates to 'sal_aggregated_metrics_per_epoch.csv'")

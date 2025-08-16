@@ -20,6 +20,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import numpy as np
+import mediapipe as mp
 
 class RandomCrop(torch.nn.Module):
     """
@@ -41,11 +42,6 @@ class RandomCrop(torch.nn.Module):
     def __call__(self, data):
         out = torch.stack([self.crop(data) for _ in range(self.n)])
         out = out.flatten(0,1) # output shape is (B*N,...), represented as B B B B
-        # out = [self.crop(data)]
-        # img = out[0]
-        # out_img = TF.to_pil_image(img.clamp(0, 1))
-        # filename = f"out/img_proc00.png"
-        # out_img.save(filename)
         return out
     
 class Rotate(torch.nn.Module):
@@ -61,30 +57,25 @@ class Rotate(torch.nn.Module):
     Returns:
         torch.Tensor: Rotated image(s), same shape as input.
     """
-    def __init__(self, deg: float = 15.0, invert: bool = False):
+    def __init__(self, deg: float = 15.0, invert: bool = False, center=None):
         super().__init__()
         if invert:
-            self.rotate = T.RandomRotation((180,180))
+            self.rotate = T.RandomRotation((180,180), center=None)
         else:
-            self.rotate = T.RandomRotation(deg)
+            self.rotate = T.RandomRotation(deg, center=center)
 
     def __call__(self, data):
-        # print(data.shape)
         out = self.rotate(data)
-        # img = out[0]
-        # out_img = TF.to_pil_image(img.clamp(0, 1))
-        # filename = f"out/img_proc01.png"
-        # out_img.save(filename)
         return out
 
 
 class Foveate(torch.nn.Module):
-    def __init__(self, crop_size=None, p_val=None):
+    def __init__(self): #, crop_size=None, p_val=None, center=None):
         super().__init__()
-        self.crop_size=crop_size
-        # self.timer = Timer()
+        #self.crop_size = crop_size
+        #self.center = (self.crop_size/2, self.crop_size/2) if center is None else center
 
-    def __call__(self, img):
+    def __call__(self, img, center):
         """
         Args:
             img: tensor to be foveated.
@@ -93,45 +84,33 @@ class Foveate(torch.nn.Module):
         """
         shape = img.shape[:2]
         data = img.flatten(0,1)
-        out = self.foveat_img(data, [(self.crop_size / 2, self.crop_size / 2)]).unflatten(dim=0, sizes=shape).float()
-        # img = out[0]
-        # out_img = TF.to_pil_image(img.clamp(0, 1))
-        # filename = f"out/img_proc02.png"
-        # out_img.save(filename)
+        out = self.foveat_img(data, [center]).unflatten(dim=0, sizes=shape).float()
         return out
 
     def pyramid(self, tensor, sigma=1, prNum=6):
         C,H,W = tensor.shape[-3:]
         G = tensor.clone().unsqueeze(0)
-        # print(G.shape)
         pyramids = [G]
         
         # gaussian blur
         blur = T.GaussianBlur(5, sigma)
 
-        # self.timer.start()
         # downsample
         for i in range(1, prNum):
             G = F.interpolate(blur(G), scale_factor = (0.5, 0.5), recompute_scale_factor=True)
             pyramids.append(G)
-        # self.timer.end('downsample')
-        
-        # self.timer.start()
+            
         # upsample
         for i in range(1, prNum):
             for _ in range(i):
                 pyramids[i] = F.interpolate(pyramids[i], scale_factor = (2,2), mode='bilinear', align_corners=True, recompute_scale_factor=False)
-        # self.timer.end('upsample')
-        
-        # self.timer.start()
+
         # fix shape back to original
         for i in range(1, prNum):
             pyramids[i] = F.interpolate(pyramids[i], size=(H,W))
-        # self.timer.end('fix shape')
 
         # stack and remove the extra batch dim
         out = torch.stack(pyramids).squeeze()
-        # print("pyramid out: ", out.shape)
         return out
     
     def foveat_img(self, im, fixs):
@@ -195,6 +174,7 @@ class LogPolar(torch.nn.Module):
                  mask = False, position='circumscribed', log_polar_distance = 2, random_center = False,
                  device = 'cpu'):
         super().__init__()
+        self.device = device
         self.input_shape = input_shape
         self.default_center = input_shape[0] / 2, input_shape[1] / 2
 
@@ -210,10 +190,9 @@ class LogPolar(torch.nn.Module):
         self.register_buffer('X', X)
         self.register_buffer('Y', Y)
 
-        self.device = device
+        
 
     def getPoints(self, numPoints, prob_arr, threshold = 0.20):
-#         print("shape",prob_arr.shape)
         crop_size = 0
         prob_reshape = prob_arr.reshape(-1)
         
@@ -221,53 +200,37 @@ class LogPolar(torch.nn.Module):
         x_threshold_amt = max(crop_size // 2, int(threshold * prob_arr.shape[0]))
         border_mask = np.zeros_like(prob_arr)
         border_mask[y_threshold_amt:-y_threshold_amt, x_threshold_amt:-x_threshold_amt] = 1
-        
-#         print(y_threshold_amt, "x", x_threshold_amt)
-#         print(border_mask[border_mask==1].shape)
         border_mask = border_mask.reshape(-1)
 
         prob_border_masked = prob_reshape * border_mask
         prob_border_masked /= prob_border_masked.sum()
-        
-#         print(prob_border_masked.shape, prob_border_masked.sum())
 
         try:
             points = np.random.choice(prob_reshape.shape[0], numPoints, p = prob_border_masked)
-#             print("points", numPoints)
-#             print("points", points)
             unraveled_points = np.array(np.unravel_index(points, prob_arr.shape))
             return unraveled_points
         except:
             print("errors")
-#             return np.array()
-#            print( prob_arr,prob_border_masked.sum())
             return np.random.choice(prob_reshape.shape[0], numPoints)
                 
         
     def SaliencePoints(self, data):
-    #         print("bb", data.shape, "aa", np.array(data).shape)
         
-            cv2_img = cv2.cvtColor(np.array(data).transpose((1, 2, 0)), cv2.COLOR_BGR2RGB)
-            
-    #         print("cc", cv2_img.shape)
-            saliency = cv2.saliency.StaticSaliencySpectralResidual_create()
-            (success, saliencyMap) = saliency.computeSaliency(cv2_img)
-    #        my_map = FasaSaliencyMapping(cv2_img.shape[0], cv2_img.shape[1])  # init the saliency object
-    #        saliencyMap = my_map.returnMask(cv2_img, tot_bins=8, format='BGR')/255.0
-    #         print("dd", saliencyMap)
-            points = self.getPoints(1, saliencyMap)
-    #        print(points[0], points[1])
-            return (points[0][0], points[1][0])
+        cv2_img = cv2.cvtColor(np.array(data).transpose((1, 2, 0)), cv2.COLOR_BGR2RGB)
+        saliency = cv2.saliency.StaticSaliencySpectralResidual_create()
+        (success, saliencyMap) = saliency.computeSaliency(cv2_img)
+        points = self.getPoints(1, saliencyMap)
+        return (points[0][0], points[1][0])
     
     def compute_map(self, input_shape, output_shape):
         input_shape_x, input_shape_y = input_shape
         
         if self.position == 'circumscribed':
-            MAX_R = torch.log(torch.tensor(input_shape).float().norm() / 2 * self.log_polar_distance)
+            MAX_R = torch.log(torch.tensor(input_shape,device=self.device).float().norm() / 2 * self.log_polar_distance)
         else:
-            MAX_R = torch.log(torch.tensor(input_shape).float().max() / 2 * self.log_polar_distance)
+            MAX_R = torch.log(torch.tensor(input_shape,device=self.device).float().max() / 2 * self.log_polar_distance)
 
-        theta, r = torch.meshgrid(torch.arange(self.output_shape[0]), torch.arange(self.output_shape[1]), indexing='ij')
+        theta, r = torch.meshgrid(torch.arange(self.output_shape[0],device=self.device), torch.arange(self.output_shape[1],device=self.device), indexing='ij')
         theta = theta.float()
         r = r.float()
         X = (torch.exp(r * MAX_R / self.output_shape[1])) * torch.cos(theta * 2 * torch.pi / self.output_shape[0])
@@ -290,9 +253,6 @@ class LogPolar(torch.nn.Module):
         else:
             X = self.get_buffer('X')
             Y = self.get_buffer('Y')
-        # print("xy", X,Y)
-        # print("input shape", self.input_shape)
-        # print("output shape", self.output_shape)
 
         if not center_x or not center_y:
             center_y, center_x = self.default_center
@@ -391,12 +351,193 @@ class Pipeline(torch.nn.Module):
         if not isinstance(data, torch.Tensor): 
             data = self.tensorize(data)
             data = data.unsqueeze(0)
-        # print(data.shape)
         out = self.compose(data)
-        # img = out[0]
-        # out_img = TF.to_pil_image(img.clamp(0, 1))
-        # filename = f"out/img_proc03.png"
-        # out_img.save(filename)
-        # print(out.shape)
         return out
-        # return self.compose(data)
+
+#######################################
+########### SALIENCE CODE #############
+#######################################
+
+# Create MediaPipe face mesh
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True)
+
+# Determine facial landmarks
+def get_facial_features(image):
+    assert isinstance(image, np.ndarray), f"Expected np array, got {type(image)}."
+    # if isinstance(image, torch.Tensor):
+    #     image = (image.permute(1, 2, 0).cpu().numpy() * 255).astype("uint8")
+        
+    h, w, _ = image.shape
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = face_mesh.process(rgb)
+
+    if not results.multi_face_landmarks:
+        print("No face detected.")
+        return None
+
+    features = {'left_eye': [], 'right_eye': [], 'nose': [], 'mouth': []}
+    all_landmarks = []
+
+    # Indices for face parts
+    LEFT_EYE_IDX = list(range(33, 133))
+    RIGHT_EYE_IDX = list(range(263, 362))
+    NOSE_IDX = list(range(1, 5)) + list(range(94, 100))
+    MOUTH_IDX = list(range(78, 88)) + list(range(308, 318))
+
+    landmarks = results.multi_face_landmarks[0]
+
+    for i, lm in enumerate(landmarks.landmark):
+        x, y = int(lm.x * w), int(lm.y * h)
+        all_landmarks.append((x, y))
+        if i in LEFT_EYE_IDX:
+            features['left_eye'].append((x, y))
+        if i in RIGHT_EYE_IDX:
+            features['right_eye'].append((x, y))
+        if i in NOSE_IDX:
+            features['nose'].append((x, y))
+        if i in MOUTH_IDX:
+            features['mouth'].append((x, y))
+
+    # Compute bounding box
+    xs, ys = zip(*all_landmarks)
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+    bbox_w = x_max - x_min
+    bbox_h = y_max - y_min
+    features["face_bbox"] = (x_min, y_min, bbox_w, bbox_h)
+
+    return features
+
+# Randomly sample salient points
+def sample_facial_feature_points_weighted(feature_dict, num_points=1):
+    if "face_bbox" not in feature_dict:
+        raise ValueError("Face bounding box is missing from features.")
+
+    # Compute face center
+    fx, fy, fw, fh = feature_dict["face_bbox"]
+    face_center = np.array([fx + fw / 2, fy + fh / 2])
+
+    # Collect all feature points (excluding bbox)
+    feature_points = []
+    for key, points in feature_dict.items():
+        if key != "face_bbox":
+            feature_points.extend(points)
+
+    if len(feature_points) == 0:
+        raise ValueError("No facial features found to sample from.")
+
+    points_arr = np.array(feature_points)
+
+    # Compute inverse distance to face center (closer = higher weight)
+    dists = np.linalg.norm(points_arr - face_center, axis=1)
+    # Avoid division by zero
+    dists = np.clip(dists, a_min=1e-6, a_max=None)
+    weights = 1.0 / dists 
+
+    # Normalize to probabilities
+    prob_weights = weights / np.sum(weights)
+
+    # Sample without replacement
+    num_to_sample = min(num_points, len(feature_points))
+    sampled_indices = np.random.choice(len(feature_points), size=num_to_sample, replace=False, p=prob_weights)
+    sampled_points = [feature_points[i] for i in sampled_indices]
+
+    return sampled_points
+
+class SaliencePipeline(torch.nn.Module):
+    def __init__(self, type='train', device='cpu', logpolar=True, img_size=224, 
+                 output_shape=(224, 224), num_salient_points=4):
+        """
+        Pipeline that rotates, foveates, and log-polar transforms around a salient point.
+        
+        Args:
+            type (str): 'train', 'inverted', or None
+            device (str): torch device
+            logpolar (bool): whether to apply log-polar transform
+            img_size (int): image size (assumes already cropped/resized upstream)
+            output_shape (tuple): output shape for log-polar
+            num_salient_points (int): number of points for foveation
+        """
+        super().__init__()
+        self.num_salient_points = num_salient_points
+        self.device = device
+        self.type = type
+        
+        #self.foveate = Foveate(crop_size=img_size) if logpolar else torch.nn.Identity()
+        self.foveate = Foveate() if logpolar else torch.nn.Identity()
+        self.logpolar = LogPolar(
+            input_shape=(img_size, img_size),
+            output_shape=output_shape,
+            device=device
+        ) if logpolar else torch.nn.Identity()
+
+        # if type == 'train':
+        #     self.rotate = T.RandomRotation(degrees=(-15,15), center=center)
+        # elif type == 'inverted':
+        #     self.rotate = T.RandomRotation(degrees=(180,180), center=None)
+        # else:
+        #     self.rotate = torch.nn.Identity() 
+
+    def forward(self, img): 
+        assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
+        # B,C,H,W = img.shape
+        # # Get salient points. 
+        # img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) #get_facial_features expects numpy
+
+        # salient_points = torch.zeros(B, self.num_salient_points, 2) #2 means the center's (x,y) 
+        # for i in range(B): #go through each image/identity in our batch
+        #     features = get_facial_features(img_np[i])  #get_facial_features can only run on one image at a time bc of CV2.
+        #     if features is None:
+        #         print("No face detected.")
+        #         # if face not detect, randomly sample salient points from a square with corners (80,80) & (144,144)
+        #         salient_points[i] = torch.rand((self.num_salient_points, 2))*(144-80)+80 #rand gives values in [0,1], so we convert to range [80,144]             
+        #     else: 
+        #         salient_points[i] = torch.tensor(sample_facial_feature_points_weighted(features, num_points=self.num_salient_points))
+
+        # transformed_imgs = [] #num_salient_pt-long list of (B,1,3,224,224)    
+        # for center in salient_points:
+        #     if type == 'train':
+        #         data = T.RandomRotation(degrees=(-15,15), center=center)(img)
+        #     elif type == 'inverted':
+        #         data = T.RandomRotation(degrees=(180,180))(img)
+        #     else:
+        #         data = img.clone()
+        #     #data = self.rotate(img, center=center) # (B,3,224,224)
+            
+        #     data = self.foveate(data, center=center) # (B,3,224,224)
+        #     data = self.logpolar(data, center_x=center[0], center_y=center[1]) # (B,3,224,224)
+        #     transformed_imgs.append(data.unsqueeze(1)) # (B,3,224,224) -> (B,1,3,224,224)        
+        # transformed_imgs = torch.cat(transformed_imgs, dim=1) # torch.tensor(B,num_salient_pts,3,224,224)
+        #####
+
+        img = img.to(self.device)
+        B,C,H,W = img.shape
+        img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) 
+        transformed_imgs = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
+
+        #Since logpolar can only handle 1 center at a time, we have to use a double for loop. Once it can handle batched data, then we can speed this up.
+        for b in range(B): #go through each image/identity in our batch
+            features = get_facial_features(img_np[b])  #get_facial_features can only run on one image at a time bc of CV2.
+            if features is None:
+                # if face not detect, randomly sample salient points from a square with corners (80,80) & (144,144)
+                salient_points = torch.rand((self.num_salient_points, 2),device=self.device)*(144-80)+80            
+            else: 
+                salient_points = torch.tensor(sample_facial_feature_points_weighted(features, num_points=self.num_salient_points),device=self.device)
+
+            for salient_idx, center in enumerate(salient_points):
+                if self.type == 'train':
+                    angle=torch.empty(1).uniform_(-15,15).item() #sample in range [-15,15]
+                    transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
+                    #transformed_img = T.RandomRotation(degrees=(-15,15), center=salient_points[:,sal_idx])(img)
+                elif self.type == 'inverted':
+                    transformed_img = TF.rotate(img[b],angle=180)
+                    #transformed_img = T.RandomRotation(degrees=(180,180))(img[b])
+                else:
+                    transformed_img = img[b].clone()
+                transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) #Foveat expects batch
+                transformed_img = self.logpolar(transformed_img, center_x=center[0], center_y=center[1]) # (3,224,224)
+                transformed_imgs[b,salient_idx] = transformed_img
+                
+                
+        return transformed_imgs

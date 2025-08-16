@@ -10,7 +10,9 @@ def load_dataset(dataset, identity=4, task="train"):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data/cleaned_faces_dataset/data", num_identities=identity, split=task, type="faces")
+        ds = CelebrityFacesDataset(root_dir="data/faces_cleaned", num_identities=identity, split=task, type="faces")
+    elif dataset == "objects":
+        ds = ImageNetObjectsDataset(root_dir="processed_data", num_classes=identity, split=task)
     else:
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds
@@ -67,7 +69,7 @@ class CelebrityFacesDataset(Dataset):
         # build the path to e.g. "/dataset/faces/faces/8_identities/train"
         self.data_dir = os.path.join(
             root_dir, 
-            type, 
+            #type, 
             type, 
             f"{num_identities}_identities", 
             split
@@ -104,3 +106,33 @@ class CelebrityFacesDataset(Dataset):
         # label = torch.tensor(int(label), dtype=torch.long)
         return img, label
 
+class ImageNetObjectsDataset(Dataset):
+    def __init__(self, root_dir: str, num_classes: int, split: str):
+        """
+        Args:
+            root_dir (str): path to "processed_data"
+            num_classes (int): number of object classes (4, 8, ..., 128)
+            split (str): one of "train", "valid", or "test"
+        """
+        self.samples = []
+        self.data_dir = Path(root_dir) / "ImageNet1k" / "ImageNet1k" / f"{num_classes}_objects" / split
+        if not self.data_dir.is_dir():
+            raise FileNotFoundError(f"Could not find data directory: {self.data_dir}")
+
+        self.classes = sorted([d.name for d in self.data_dir.iterdir() if d.is_dir()])
+        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
+
+        for class_name in self.classes:
+            img_dir = self.data_dir / class_name
+            for img_path in img_dir.glob("*.png"):
+                self.samples.append((img_path, self.class_to_idx[class_name]))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert("RGB")
+        img = TF.to_tensor(img)
+        label = torch.tensor(label, dtype=torch.long)
+        return img, label
