@@ -452,7 +452,7 @@ class SaliencePipeline(torch.nn.Module):
         Pipeline that rotates, foveates, and log-polar transforms around a salient point.
         
         Args:
-            type (str): 'train', 'inverted', or None
+            type (str): 'train', 'test', or 'valid' --> 'train', 'inverted', or None
             device (str): torch device
             logpolar (bool): whether to apply log-polar transform
             img_size (int): image size (assumes already cropped/resized upstream)
@@ -471,6 +471,8 @@ class SaliencePipeline(torch.nn.Module):
             output_shape=output_shape,
             device=device
         ) if logpolar else torch.nn.Identity()
+
+        self.lp_true = logpolar
 
         # if type == 'train':
         #     self.rotate = T.RandomRotation(degrees=(-15,15), center=center)
@@ -530,13 +532,14 @@ class SaliencePipeline(torch.nn.Module):
                     angle=torch.empty(1).uniform_(-15,15).item() #sample in range [-15,15]
                     transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
                     #transformed_img = T.RandomRotation(degrees=(-15,15), center=salient_points[:,sal_idx])(img)
-                elif self.type == 'inverted':
+                elif self.type == 'test': #'inverted'
                     transformed_img = TF.rotate(img[b],angle=180)
                     #transformed_img = T.RandomRotation(degrees=(180,180))(img[b])
                 else:
                     transformed_img = img[b].clone()
-                transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) #Foveat expects batch
-                transformed_img = self.logpolar(transformed_img, center_x=center[0], center_y=center[1]) # (3,224,224)
+                if self.lp_true:
+                    transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) #Foveat expects batch
+                    transformed_img = self.logpolar(transformed_img, center_x=center[0], center_y=center[1]) # (3,224,224)
                 transformed_imgs[b,salient_idx] = transformed_img
                 
                 

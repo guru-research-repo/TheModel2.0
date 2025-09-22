@@ -5,14 +5,20 @@ from utils import get_label_mapping, label_to_one_hot
 from pathlib import Path
 from PIL import Image
 from torch.utils.data import Dataset
+import numpy as np
 
-def load_dataset(dataset, identity=4, task="train"):
+def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
         ds = CelebrityFacesDataset(root_dir="data/faces_cleaned", num_identities=identity, split=task, type="faces")
     elif dataset == "objects":
         ds = ImageNetObjectsDataset(root_dir="processed_data", num_classes=identity, split=task)
+    elif dataset == "salience":
+        ds = SalienceDataset(root_dir="processed_data/salience/updated_faces", 
+                             num_identities=32, 
+                             split=task, 
+                             num_salient_points=num_salient_points)
     else:
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds
@@ -136,3 +142,120 @@ class ImageNetObjectsDataset(Dataset):
         img = TF.to_tensor(img)
         label = torch.tensor(label, dtype=torch.long)
         return img, label
+
+class SalienceShuffledDataset(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str, type: str,
+                 num_salient_points: int = 4, seed: int = 42):
+        """
+        Args:
+            root_dir (str): base path, e.g. "processed_data/salience/updated_faces"
+            num_identities (int): e.g. 32
+            split (str): one of "train", "valid", "test"
+            type (str): "faces" or "dogs"
+            num_salient_points (int): how many processed variants per base image
+            seed (int): global seed for reproducibility
+        """
+        self.num_salient_points = num_salient_points
+        self.seed = seed
+
+        # build the path to e.g. ".../faces/32_identities/train"
+        self.data_dir = os.path.join(root_dir, type, f"{num_identities}_identities", split)
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+        # list all identity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        self.map = get_label_mapping(type=type)
+
+        # Collect base images and all their processed variants
+        self.samples = []  # [(base_img_id, [proc_paths...], label), ...]
+        rng = np.random.RandomState(self.seed)
+
+        for ident in self.classes:
+            ident_dir = os.path.join(self.data_dir, ident)
+            # group by base image number (before "_proc")
+            base_dict = {}
+            for fname in sorted(os.listdir(ident_dir)):
+                if fname.endswith(".png") and "_proc" in fname:
+                    base_num = fname.split("_proc")[0]  # base image
+                    base_dict.setdefault(base_num, []).append(os.path.join(ident_dir, fname))
+
+            for base_num, proc_list in base_dict.items():
+                proc_list = sorted(proc_list)  # ensure consistent order
+                # deterministically shuffle using seed + base_num
+                local_rng = np.random.RandomState(self.seed + hash(base_num) % (2**32))
+                local_rng.shuffle(proc_list)
+                self.samples.append((base_num, proc_list, ident))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        base_num, proc_list, label = self.samples[idx]
+        # take first n processed variants
+        chosen = proc_list[:self.num_salient_points]
+
+        imgs = [TF.to_tensor(Image.open(p).convert("RGB")) for p in chosen]
+        imgs = torch.stack(imgs, dim=0)  # (n, C, H, W)
+
+        label = label_to_one_hot(label, self.map)
+        return imgs, label
+
+class SalienceDataset(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str,
+                 num_salient_points: int = 4):
+        """
+        Args:
+            root_dir (str): base path, e.g. "processed_data/salience/updated_faces"
+            num_identities (int): e.g. 32
+            split (str): one of "train", "valid", "test"
+            num_salient_points (int): how many processed variants per base image
+        """
+        self.num_salient_points = num_salient_points
+
+        # build the path to e.g. ".../faces/32_identities/train"
+        self.data_dir = os.path.join(root_dir, f"{num_identities}_identities", split)
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+        # list all identity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        self.map = get_label_mapping(type="faces")
+
+        # Collect base images and all their processed variants
+        self.samples = []  # [(base_img_id, [proc_paths...], label), ...]
+
+        for ident in self.classes:
+            ident_dir = os.path.join(self.data_dir, ident)
+            # group by base image number (before "_proc")
+            base_dict = {}
+            for fname in sorted(os.listdir(ident_dir)):
+                if fname.endswith(".png") and "_proc" in fname:
+                    base_num = fname.split("_proc")[0]  # base image
+                    base_dict.setdefault(base_num, []).append(os.path.join(ident_dir, fname))
+
+            for base_num, proc_list in base_dict.items():
+                proc_list = sorted(proc_list)  # ensure consistent order
+                self.samples.append((base_num, proc_list, ident))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        base_num, proc_list, label = self.samples[idx]
+        # take first n processed variants
+        chosen = proc_list[:self.num_salient_points]
+
+        imgs = [TF.to_tensor(Image.open(p).convert("RGB")) for p in chosen]
+        imgs = torch.stack(imgs, dim=0)  # (n, C, H, W)
+
+        label = label_to_one_hot(label, self.map)
+        return imgs, label
