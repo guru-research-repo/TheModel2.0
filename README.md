@@ -14,7 +14,12 @@ Using same fixation points for each base image instead of random fixation points
 
 ## Plotting
 
-1. Once done running, move the .csv outputs from `/output` to `/visualization` 
-- only do one type of output at a time (LP or CNN)
-2. `python foo.py` to aggregate data
-3. `python plot.py` to plot it
+1. Once done running main code, move the .csv outputs from `/output` to `/visualization` 
+   - Only do one type of output at a time (LP or CNN)
+   - Make sure to remove any old .csv files from /visualization before plotting
+2. Run `python foo.py` to aggregate data
+   - Update line 5 based on the number of fixation points for the current experiment, e.g. `num_fix = 4`
+   - Update line 6 for CNN vs LP experiment, e.g. `sal = 'LP'`
+3. Run `python plot.py` to plot data
+   - Update line 6 based on the number of fixation points for the current experiment, e.g. `num_fix = 4`
+   - Update line 7 for CNN vs LP experiment, e.g. `sal = 'LP'`
