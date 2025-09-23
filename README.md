@@ -1,39 +1,25 @@
 # TheModel2.0
 
 ## This branch changes:
-Real time transformation
-trans.py instead of transformation.py
-main2.py instead of main.py
-data_preprocess.py exits after the first image (just to produce sample visualizations)
+Creating preprocessed salience data instead of real-time transformations.
 
-## Getting Started
-Steps to run the project:
+Using same fixation points for each base image instead of random fixation points every time an image is seen.
 
-1. Clone the repository (if you haven't done it already):
-   ```bash
-   git clone https://your.repo.url/TheModel2.0.git
-   cd TheModel2.0
-2. Create and activate a Conda environment
-   ```bash
-   conda create -n themodel2 python=3.10
-   conda activate themodel2
-3. Install PyTorch
-   Make sure you have CUDA 12.8 support, then run:
-   `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
-4. Install the remaining dependencies (may need additional packages)
-   `pip install numpy pandas pyyaml matplotlib opencv-python tqdm`
-5. Run `python download.py` to get all dataset downloaded. Comment out any datasets you don't want.
-6. Run `python data_preprocess.py` to create pre-processed data on local disk.
-7. From project root, run `python main.py` command, or `torchrun --nproc_per_node=6 --master_port=29500 main_ddp.py`.
-8. See the `output` folder for train, validation and test accuracy / standard deviation.
+## Running this branch:
 
-*Note*: main_ddp.py is used to rapidly train a model with multiple GPU, the epoch accuracy only reflects the average accuracy of one GPU, not the whole batch. <br>
-*Note*: main_ddp_test.py updates batch accuracy among GPUs, but significantly impedes the training speed. This method is not recommended to use.
+1. Run `python salience_preproccess.py` to create pre-processed fixation point data on local disk.
+2. Run `python main_salience.py` to run salience experiments
+   - For each experiment, update line 19 to your desired salient count, e.g. `salient_counts = [4]`
+   - For each experiment, update line 26 with the corresponding batch size for chosen salient counts, e.g. `batch_size = 64`
 
-## Running and plotting
+## Plotting
 
-1. run `CUDA_VISIBLE_DEVICES=n python main2.py`
-2. Once done, move the .csv outputs from `/output` to `/visualization` 
-- only do one type of output at a time (LP or CNN)
-3. `python foo.py` to aggregate data
-4. `python plot.py` to plot it
+1. Once done running main code, move the .csv outputs from `/output` to `/visualization` 
+   - Only do one type of output at a time (LP or CNN)
+   - Make sure to remove any old .csv files from /visualization before plotting
+2. Run `python foo.py` to aggregate data
+   - Update line 5 based on the number of fixation points for the current experiment, e.g. `num_fix = 4`
+   - Update line 6 for CNN vs LP experiment, e.g. `sal = 'LP'`
+3. Run `python plot.py` to plot data
+   - Update line 6 based on the number of fixation points for the current experiment, e.g. `num_fix = 4`
+   - Update line 7 for CNN vs LP experiment, e.g. `sal = 'LP'`
