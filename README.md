@@ -8,6 +8,7 @@ Using same fixation points for each base image instead of random fixation points
 ## Running this branch:
 
 1. Run `python salience_preproccess.py` to create pre-processed fixation point data on local disk.
+   - This assumes `faces_cleaned` data is already downloaded. If not downloaded, first run `download.py`.
 2. Run `python main_salience.py` to run salience experiments
    - For each experiment, update line 20 to your desired salient count, e.g. `salient_counts = [4]`
    - For each experiment, update line 27 with the corresponding batch size for chosen salient counts, e.g. `batch_size = 64`

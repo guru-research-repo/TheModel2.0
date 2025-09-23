@@ -4,11 +4,12 @@ import torchvision.transforms.functional as TF
 import torch
 from trans import SaliencePipeline
 
-# Step 1: Load raw test dataset
+# Step 1: Load raw datasets
+    # assumes data is stored in data/faces_cleaned/faces/{num_identities}_identities/{split}/{identity}/img#.jpg
 # Step 2: Initialize Pipeline
 # Step 3: Transform images using pipeline
 # Step 4: Save transformed images
-    #create save dir (done)
+    #create save dir 
     #create subdir for each person
     #save each transformed image in subdir w/ img#_proc#
 
