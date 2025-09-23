@@ -1,6 +1,10 @@
 import glob
 import pandas as pd
 
+num_ident = 32 # number of identities trained on
+num_fix = 4 # number of fixation poitns trained on 
+sal = 'CNN' # LP or CNN
+
 # Collect data from all CSV files in the current directory
 df_list = []
 for fpath in glob.glob("*.csv"):
@@ -41,6 +45,6 @@ agg_dict = {
 
 # 5) Convert to DataFrame and save
 agg_df = pd.DataFrame(agg_dict)
-agg_df.to_csv("sal_aggregated_metrics_per_epoch.csv", index=False)
+agg_df.to_csv(f"{num_ident}_{num_fix}_{sal}_aggregated_metrics_per_epoch.csv", index=False)
 
-print("Saved per-epoch aggregates to 'sal_aggregated_metrics_per_epoch.csv'")
+print(f"Saved per-epoch aggregates to '{num_ident}_{num_fix}_{sal}_aggregated_metrics_per_epoch.csv'")

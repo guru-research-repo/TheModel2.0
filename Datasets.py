@@ -23,6 +23,29 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds
 
+# Used only for salience training
+def make_datasets(ident, num_salient_points, faces_data="updated"):
+    return {
+        "train": SalienceDataset(
+            root_dir=f"processed_data/salience/{faces_data}_faces",
+            num_identities=ident,
+            split="train",
+            num_salient_points=num_salient_points
+        ),
+        "valid": SalienceDataset(
+            root_dir=f"processed_data/salience/{faces_data}_faces",
+            num_identities=ident,
+            split="valid",
+            num_salient_points=num_salient_points
+        ),
+        "test": SalienceDataset(
+            root_dir=f"processed_data/salience/{faces_data}_faces",
+            num_identities=ident,
+            split="test",
+            num_salient_points=num_salient_points
+        ),
+    }
+
 class CelebAFaceIDDataset(Dataset):
     def __init__(self, root_dir: str = "data", split: str = "train"):
         """

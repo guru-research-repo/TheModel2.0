@@ -9,67 +9,27 @@ from Datasets import *
 from trans import Pipeline, SaliencePipeline
 
 
-def main(lp = True, dataset_name: str = "faces"):
+def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     os.makedirs("output", exist_ok=True)
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
+    faces_data      = faces_data
     identity_counts = [32]
-    salient_counts = [4]
+    salient_counts  = [4]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = epoch_block * len(salient_counts)
     num_gpu         = 1
     num_workers     = 4
     idx_gpu         = 5   # The index of GPU that this task is about to run on
-    batch_size      = 64 #bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
+    batch_size      = 64  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
     lr              = 1e-3
-    #device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
-    n_crops         = 4
 
     # ------------------------------------------------------------------------
-    # 1) Pre‑load all datasets
-    # ------------------------------------------------------------------------
-    all_datasets = {
-        ident: { split: load_dataset(dataset_name, ident, split)
-                for split in splits }
-        for ident in identity_counts
-    }
-
-    # ## NEW
-    # def make_datasets(ident, num_salient_points):
-    #     return {
-    #         "train": SalienceDataset(
-    #             root_dir="processed_data/salience/updated_faces",
-    #             num_identities=ident,
-    #             split="train",
-    #             type="faces",
-    #             num_salient_points=num_salient_points,
-    #             seed=42
-    #         ),
-    #         "valid": SalienceDataset(
-    #             root_dir="processed_data/salience/updated_faces",
-    #             num_identities=ident,
-    #             split="valid",
-    #             type="faces",
-    #             num_salient_points=num_salient_points,
-    #             seed=42
-    #         ),
-    #         "test": SalienceDataset(
-    #             root_dir="processed_data/salience/updated_faces",
-    #             num_identities=ident,
-    #             split="test",
-    #             type="faces",
-    #             num_salient_points=num_salient_points,
-    #             seed=42
-    #         ),
-    #     }
-
-
-    # ------------------------------------------------------------------------
-    # 2) Helper to map an epoch → identity
+    # 1) Helper to map an epoch → identity
     # ------------------------------------------------------------------------
     def identity_for_epoch(epoch: int) -> int:
         idx = (epoch - 1) // epoch_block
@@ -80,17 +40,10 @@ def main(lp = True, dataset_name: str = "faces"):
         return salient_counts[idx]
 
     # ------------------------------------------------------------------------
-    # 3) Training loop
+    # 2) Training loop
     # ------------------------------------------------------------------------
     history         = []
     model = Model(size=224)
-
- # --- multi‑GPU wrap ---
-    # if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-    #     n_gpu = min(num_gpu, torch.cuda.device_count())
-    #     print(f"→ Using {n_gpu} GPUs")
-    #     model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
-
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -101,35 +54,25 @@ def main(lp = True, dataset_name: str = "faces"):
         ident = identity_for_epoch(epoch)
         num_salient_points = salient_points_for_epoch(epoch)
 
-        #UPDATE
-        #trainPipeline = SaliencePipeline('train', logpolar=lp, device=device, num_salient_points=num_salient_points)
-        #valPipeline = SaliencePipeline(None, logpolar=lp, device=device, num_salient_points=num_salient_points)
-        #testPipeline = SaliencePipeline('inverted', logpolar=lp, device=device, num_salient_points=num_salient_points)
-        
-        #NEW
-        #datasets = make_datasets(ident, num_salient_points)
-
         # 2) re-create loaders for this identity
+        datasets = make_datasets(ident, num_salient_points, faces_data)
+
         train_loader = DataLoader(
-            all_datasets[ident]["train"],
-            #datasets["train"],
+            datasets["train"],
             batch_size=batch_size,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=True
         )
         valid_loader = DataLoader(
-            all_datasets[ident]["valid"],
-            #datasets["valid"],
+            datasets["valid"],
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True
         )
         test_loader  = DataLoader(
-            #all_datasets[ident]["valid"], #UPDATE
-            all_datasets[ident]["test"],
-            #datasets["test"],
+            datasets["test"],
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
@@ -155,9 +98,7 @@ def main(lp = True, dataset_name: str = "faces"):
             # repeat because we have num_salient_pts-many images
             label_ids = label_ids.repeat_interleave(num_salient_points) 
 
-            #UPDATE
             B,n,C,H,W = inputs.shape
-            #inputs = trainPipeline(inputs).to(device) #(B,C,H,W) -> (B,num_salience_pts,C,H,W)
             inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
     
             optimizer.zero_grad()
@@ -191,11 +132,9 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in valid_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                #label_ids = label_ids.repeat_interleave(num_salient_points) 
                 
                 # transform input data
-                B,n,C,H,W = inputs.shape #UPDATE
-                #inputs = valPipeline(inputs).to(device) #(B,num_salience_pts,C,H,W) #UPDATE
+                B,n,C,H,W = inputs.shape 
                 inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
                 outputs = model(inputs) #(B*num_salience_pts, output_dim)
 
@@ -217,11 +156,9 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                #label_ids = label_ids.repeat_interleave(num_salient_points) 
                 
                 # transform input data
-                B,n,C,H,W = inputs.shape #UPDATE
-                #inputs = testPipeline(inputs).to(device) #(B,num_salience_pts,C,H,W) #UPDATE
+                B,n,C,H,W = inputs.shape 
                 inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
                 outputs = model(inputs) #(B*num_salience_pts, output_dim)
                 outputs = outputs.reshape(B, num_salient_points, -1)
@@ -255,10 +192,10 @@ def main(lp = True, dataset_name: str = "faces"):
 
 if __name__ == "__main__":
     # main(lp=True)
-    for i in range(5):
-        print(f"starting LP {i}...")
-        main(lp=True, dataset_name="salience") #UPDATE
-
     # for i in range(1):
-    #     print(f"starting CNN {i}...")
-    #     main(lp=False, dataset_name="faces")
+    #     print(f"starting LP {i}...")
+    #     main(lp=True, dataset_name="salience", faces_data="updated") 
+
+    for i in range(5):
+        print(f"starting CNN {i}...")
+        main(lp=False, dataset_name="salience", faces_data="cnn")

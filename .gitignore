@@ -3,3 +3,6 @@ processed_data
 __pycache__
 output
 visualization/old
+.ipynb_checkpoints
+new_trans.py
+old_main_salience.py
