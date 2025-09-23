@@ -68,7 +68,6 @@ class Rotate(torch.nn.Module):
         out = self.rotate(data)
         return out
 
-
 class Foveate(torch.nn.Module):
     def __init__(self): #, crop_size=None, p_val=None, center=None):
         super().__init__()
@@ -464,7 +463,6 @@ class SaliencePipeline(torch.nn.Module):
         self.device = device
         self.type = type
         
-        #self.foveate = Foveate(crop_size=img_size) if logpolar else torch.nn.Identity()
         self.foveate = Foveate() if logpolar else torch.nn.Identity()
         self.logpolar = LogPolar(
             input_shape=(img_size, img_size),
@@ -474,55 +472,19 @@ class SaliencePipeline(torch.nn.Module):
 
         self.lp_true = logpolar
 
-        # if type == 'train':
-        #     self.rotate = T.RandomRotation(degrees=(-15,15), center=center)
-        # elif type == 'inverted':
-        #     self.rotate = T.RandomRotation(degrees=(180,180), center=None)
-        # else:
-        #     self.rotate = torch.nn.Identity() 
-
     def forward(self, img): 
         assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
-        # B,C,H,W = img.shape
-        # # Get salient points. 
-        # img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) #get_facial_features expects numpy
-
-        # salient_points = torch.zeros(B, self.num_salient_points, 2) #2 means the center's (x,y) 
-        # for i in range(B): #go through each image/identity in our batch
-        #     features = get_facial_features(img_np[i])  #get_facial_features can only run on one image at a time bc of CV2.
-        #     if features is None:
-        #         print("No face detected.")
-        #         # if face not detect, randomly sample salient points from a square with corners (80,80) & (144,144)
-        #         salient_points[i] = torch.rand((self.num_salient_points, 2))*(144-80)+80 #rand gives values in [0,1], so we convert to range [80,144]             
-        #     else: 
-        #         salient_points[i] = torch.tensor(sample_facial_feature_points_weighted(features, num_points=self.num_salient_points))
-
-        # transformed_imgs = [] #num_salient_pt-long list of (B,1,3,224,224)    
-        # for center in salient_points:
-        #     if type == 'train':
-        #         data = T.RandomRotation(degrees=(-15,15), center=center)(img)
-        #     elif type == 'inverted':
-        #         data = T.RandomRotation(degrees=(180,180))(img)
-        #     else:
-        #         data = img.clone()
-        #     #data = self.rotate(img, center=center) # (B,3,224,224)
-            
-        #     data = self.foveate(data, center=center) # (B,3,224,224)
-        #     data = self.logpolar(data, center_x=center[0], center_y=center[1]) # (B,3,224,224)
-        #     transformed_imgs.append(data.unsqueeze(1)) # (B,3,224,224) -> (B,1,3,224,224)        
-        # transformed_imgs = torch.cat(transformed_imgs, dim=1) # torch.tensor(B,num_salient_pts,3,224,224)
-        #####
-
+        
         img = img.to(self.device)
         B,C,H,W = img.shape
         img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) 
         transformed_imgs = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
 
-        #Since logpolar can only handle 1 center at a time, we have to use a double for loop. Once it can handle batched data, then we can speed this up.
-        for b in range(B): #go through each image/identity in our batch
-            features = get_facial_features(img_np[b])  #get_facial_features can only run on one image at a time bc of CV2.
+        # Loop through each identity in batch
+        for b in range(B): 
+            features = get_facial_features(img_np[b])  
             if features is None:
-                # if face not detect, randomly sample salient points from a square with corners (80,80) & (144,144)
+                # if face not detected, randomly sample salient points from a square with corners (80,80) & (144,144)
                 salient_points = torch.rand((self.num_salient_points, 2),device=self.device)*(144-80)+80            
             else: 
                 salient_points = torch.tensor(sample_facial_feature_points_weighted(features, num_points=self.num_salient_points),device=self.device)
@@ -531,16 +493,13 @@ class SaliencePipeline(torch.nn.Module):
                 if self.type == 'train':
                     angle=torch.empty(1).uniform_(-15,15).item() #sample in range [-15,15]
                     transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
-                    #transformed_img = T.RandomRotation(degrees=(-15,15), center=salient_points[:,sal_idx])(img)
-                elif self.type == 'test': #'inverted'
-                    transformed_img = TF.rotate(img[b],angle=180)
-                    #transformed_img = T.RandomRotation(degrees=(180,180))(img[b])
+                elif self.type == 'test': 
+                    transformed_img = TF.rotate(img[b],angle=180) # invert test images
                 else:
                     transformed_img = img[b].clone()
                 if self.lp_true:
-                    transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) #Foveat expects batch
+                    transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) --> Foveate expects batch
                     transformed_img = self.logpolar(transformed_img, center_x=center[0], center_y=center[1]) # (3,224,224)
                 transformed_imgs[b,salient_idx] = transformed_img
-                
                 
         return transformed_imgs
