@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 num_ident = 32 # number of identities trained on
 num_fix = 4 # number of fixation poitns trained on 
 sal = 'CNN' # LP or CNN
+title = 'Fixations' if sal == 'LP' else 'Crops' 
 
 # Ensure numeric types
 df = pd.read_csv(f'{num_ident}_{num_fix}_{sal}_aggregated_metrics_per_epoch.csv').apply(pd.to_numeric, errors='coerce')
@@ -36,7 +37,7 @@ ax.fill_between(epochs, test - test_std, test + test_std,
 # Labels and legend
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Accuracy')
-ax.set_title(f'{num_fix} Fixations on {num_ident} Identities - {sal}')
+ax.set_title(f'{num_fix} {title} on {num_ident} Identities - {sal}')
 ax.legend()
 ax.grid(True)
 

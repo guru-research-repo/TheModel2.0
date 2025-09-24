@@ -6,7 +6,8 @@ from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from Datasets import *
-from trans import Pipeline, SaliencePipeline
+from trans import Pipeline
+from salience_trans import SaliencePipeline
 
 
 def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
