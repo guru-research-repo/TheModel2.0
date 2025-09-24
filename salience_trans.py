@@ -115,22 +115,25 @@ def sample_facial_feature_points_weighted(feature_dict, num_points=1):
 
 class SaliencePipeline(torch.nn.Module):
     def __init__(self, type='train', device='cpu', logpolar=True, img_size=224, 
-                 output_shape=(224, 224), num_salient_points=4):
+                 output_shape=(224, 224), num_salient_points=4, n_crops=4):
         """
-        Pipeline that rotates, foveates, and log-polar transforms around a salient point.
+        Pipeline that rotates, foveates, and log-polar transforms around a salient point (LP)
+            or crops then rotates around a salient point (CNN).
         
         Args:
             type (str): 'train', 'test', or 'valid' --> 'train', 'inverted', or None
             device (str): torch device
             logpolar (bool): whether to apply log-polar transform
-            img_size (int): image size 
+            img_size (int): image size (LP) or crop size (CNN)
             output_shape (tuple): output shape for log-polar transform
-            num_salient_points (int): number of points for foveation 
+            num_salient_points (int): number of fixations 
+            n_crops (int): number of crops for CNN
         """
         super().__init__()
         self.num_salient_points = num_salient_points
         self.device = device
         self.type = type
+        self.n_crops = n_crops
         
         self.foveate = Foveate() if logpolar else torch.nn.Identity()
         self.logpolar = LogPolar(
@@ -140,16 +143,15 @@ class SaliencePipeline(torch.nn.Module):
         ) if logpolar else torch.nn.Identity()
 
         self.lp_true = logpolar
-        # TODO
-        self.crop = RandomCrop(n=num_salient_points, crop_size=img_size) if not logpolar else torch.nn.Identity()
+        self.crop = RandomCrop(n=n_crops, crop_size=img_size)
 
     def forward(self, img): 
         assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
         
         img = img.to(self.device)
+        img = self.crop(img) if not self.lp_true else img #crop if CNN
         B,C,H,W = img.shape
         img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) 
-        img_np = self.crop(img_np) # TODO
         transformed_imgs = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
 
         # Loop through each identity in batch
@@ -163,8 +165,12 @@ class SaliencePipeline(torch.nn.Module):
 
             for salient_idx, center in enumerate(salient_points):
                 if self.type == 'train':
-                    angle=torch.empty(1).uniform_(-15,15).item() #sample in range [-15,15]
-                    transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
+                    if self.lp_true:
+                        angle=torch.empty(1).uniform_(-15,15).item() #sample value in range [-15,15]
+                        transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
+                    else:
+                        angle=torch.empty(B).uniform_(-15,15) #sample n_crops-many values in range [-15,15]
+                        transformed_img = TF.rotate(img[b],angle=angle[b].item(),center=(center[0],center[1]))
                 elif self.type == 'test': 
                     transformed_img = TF.rotate(img[b],angle=180) # invert test images
                 else:

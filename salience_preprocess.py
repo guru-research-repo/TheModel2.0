@@ -16,16 +16,16 @@ from salience_trans import *
 
 num_identities = 32
 for faces_data in ['updated', 'cnn']: # create LP dataset and CNN dataset
-    for split in ['test', 'train', 'valid']:
+    for split in ['test', 'train', 'valid']: 
         split_dir = Path(f'data/faces_cleaned/faces/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
         save_dir = Path(f'processed_data/salience/{faces_data}_faces/{num_identities}_identities/{split}')
         save_dir.mkdir(parents=True, exist_ok=True)
 
         # Create pipeline to transform images
         if faces_data == 'updated':
-            pipeline = SaliencePipeline(split, logpolar=(faces_data=='updated'), num_salient_points=64) #LP
+            pipeline = SaliencePipeline(split, logpolar=True, num_salient_points=64) #LP
         else:
-            pipeline = Pipeline(split, logpolar=False, n_crops=64) #CNN
+            pipeline = SaliencePipeline(split, logpolar=False, n_crops=64, num_salient_points=1, img_size=180) #CNN
 
         # Get directory for the current split
         for label_dir in split_dir.iterdir(): # folder of images for each person
@@ -36,7 +36,8 @@ for faces_data in ['updated', 'cnn']: # create LP dataset and CNN dataset
                 img_pil = Image.open(img_path).convert("RGB") # load image as PIL object
                 img_tensor = TF.to_tensor(img_pil).unsqueeze(0) # convert to torch.tensor of shape (C,H,W) -> unsqueeze to (1,C,H,W), since pipeline expects batched imgs
                 transformed_imgs = pipeline(img_tensor) # torch.tensor(B,N,C,H,W)
-                transformed_imgs = transformed_imgs.unsqueeze(0) if faces_data == 'cnn' else transformed_imgs #CNN pipeline doesn't add batch dim so manually add batch dim
+                if faces_data == 'cnn':
+                    transformed_imgs = transformed_imgs.permute(1,0,2,3,4)
                 
                 for n, transformed_img_tensor in enumerate(transformed_imgs[0]): #torch.tensor (C,H,W). note: batch_size=1 from unsqueeze above.
                     transformed_img_pil = TF.to_pil_image(transformed_img_tensor.clamp(0, 1)) #convert tensor to PIL Image

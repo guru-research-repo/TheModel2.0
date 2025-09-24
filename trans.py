@@ -33,7 +33,7 @@ class RandomCrop(torch.nn.Module):
     Returns:
         torch.Tensor: Randomly cropped patches of shape (N, C, W, H)
     """
-    def __init__(self, n: int = 64, crop_size: int = 180):
+    def __init__(self, n: int = 4, crop_size: int = 180):
         super().__init__()
         self.n=n
         self.crop=T.RandomCrop(crop_size)
@@ -303,7 +303,7 @@ class LogPolar(torch.nn.Module):
 
 class Pipeline(torch.nn.Module):
     def __init__(self, type = 'train', logpolar = False, device = 'cpu', 
-                 n_crops = 64,
+                 n_crops = 4,
                  normalize = T.Normalize(
                     mean = (0.485, 0.456, 0.406),
                     std = (0.229, 0.224, 0.225)),
@@ -347,9 +347,6 @@ class Pipeline(torch.nn.Module):
 
     def forward(self, data):
         if not isinstance(data, torch.Tensor): 
-            # ensure input is RGB
-            # if isinstance(data, np.ndarray) and data.ndim == 2:
-            #     data = np.stack([data]*3, axis=-1)  # expand grayscale to RGB
             data = self.tensorize(data)
             data = data.unsqueeze(0)
         out = self.compose(data)
