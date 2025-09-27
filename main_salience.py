@@ -18,14 +18,14 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     dataset_name    = dataset_name
     faces_data      = faces_data
     identity_counts = [32]
-    salient_counts  = [32]
+    salient_counts  = [64]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = epoch_block * len(salient_counts)
     num_gpu         = 1
     num_workers     = 4
     idx_gpu         = 5   # The index of GPU that this task is about to run on
-    batch_size      = 8  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
+    batch_size      = 4  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
     lr              = 1e-3
     device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
 
@@ -193,10 +193,10 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
 
 if __name__ == "__main__":
     # main(lp=True)
-    # for i in range(2):
+    # for i in range(5):
     #     print(f"starting LP {i}...")
     #     main(lp=True, dataset_name="salience", faces_data="updated") 
 
-    for i in range(2):
+    for i in range(5):
         print(f"starting CNN {i}...")
         main(lp=False, dataset_name="salience", faces_data="cnn")

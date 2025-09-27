@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 num_ident = 32 # number of identities trained on
-num_fix = 32 # number of fixation poitns trained on 
+num_fix = 64 # number of fixation poitns trained on 
 sal = 'CNN' # LP or CNN
 title = 'Fixations' if sal == 'LP' else 'Crops' 
 
