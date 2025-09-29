@@ -13,6 +13,7 @@ Each function returns an output with the same shape as its input. Batch support 
 
 """
 
+from pathlib import Path
 import random
 import cv2
 import torch
@@ -20,6 +21,10 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import numpy as np
+import os
+from PIL import Image
+import matplotlib.pyplot as plt
+
 
 class Normalize(torch.nn.Module):
     """
@@ -111,6 +116,7 @@ class Foveate(torch.nn.Module):
     def __init__(self, crop_size=None, p_val=None):
         super().__init__()
         self.crop_size=crop_size
+        self.i = 0
         # self.timer = Timer()
 
     def __call__(self, img):
@@ -123,10 +129,12 @@ class Foveate(torch.nn.Module):
         shape = img.shape[:2]
         data = img.flatten(0,1)
         out = self.foveat_img(data, [(self.crop_size / 2, self.crop_size / 2)]).unflatten(dim=0, sizes=shape).float()
-        # img = out[0]
-        # out_img = TF.to_pil_image(img.clamp(0, 1))
-        # filename = f"out/img_proc02.png"
-        # out_img.save(filename)
+        # for t in range(out.shape[0]):
+        #     img = out[t]
+        #     out_img = TF.to_pil_image(img.clamp(0, 1))
+        #     filename = f"out/img_proc02-{self.i}-{t}.png"
+        #     out_img.save(filename)
+        # self.i +=1
         return out
 
     def pyramid(self, tensor, sigma=1, prNum=6):
@@ -406,7 +414,7 @@ class Pipeline(torch.nn.Module):
         self.tensorize = T.ToTensor()
         
         self.compose = T.Compose([
-            self.normalize,
+            # self.normalize,
             self.crop,
             self.rotate,
             self.foveate,
@@ -426,3 +434,79 @@ class Pipeline(torch.nn.Module):
         # print(out.shape)
         return out
         # return self.compose(data)
+
+
+if __name__ == "__main__":
+    img_path = r'data/dogs1k/dogs1k/4_identities/test/basset, basset hound/' # image or directory of images
+    out_path = 'processed_data/dogs'
+    Path(out_path).mkdir(exist_ok=True)
+
+    img_path = Path(img_path).expanduser()
+    out_path = Path(out_path).expanduser()
+
+    upright = Pipeline(None, n_crops=1, logpolar=True, crop_size=224)
+    inverted = Pipeline('inverted', n_crops=1, logpolar=True, crop_size=224)
+
+    if os.path.exists(img_path):
+        if os.path.isfile(img_path):
+            try:
+                image = Image.open(img_path).convert("RGB")
+            except Exception:
+                print('error')
+                exit(0)
+
+            # Convert to tensor and get four random crops
+            # tensor_img = TF.to_tensor(img)
+            plt.imshow(image)
+            plt.show()
+            transformed = upright(image)
+            
+            for i, img in enumerate(transformed):    
+                # Save
+                out_img = TF.to_pil_image(img.clamp(0, 1))
+                filename = f"{img_path.stem}_UP{i}.png"
+                out_img.save(out_path / filename)
+
+            transformed = inverted(image)
+            
+            for i, img in enumerate(transformed):    
+                # Save
+                out_img = TF.to_pil_image(img.clamp(0, 1))
+                filename = f"{img_path.stem}_INV{i}.png"
+                out_img.save(out_path / filename)
+
+        elif os.path.isdir(img_path):
+            print('processing directory ', img_path)
+            for img_file in img_path.iterdir():
+                    if not img_file.is_file():
+                        continue
+                    try:
+                        image = Image.open(img_file).convert("RGB")
+                    except Exception:
+                        continue
+
+                    # Convert to tensor and get four random crops
+                    # tensor_img = TF.to_tensor(img)
+                    plt.imshow(image)
+                    plt.show()
+                    transformed = upright(image)
+                    
+                    for i, img in enumerate(transformed):    
+                        # Save
+                        out_img = TF.to_pil_image(img.clamp(0, 1))
+                        filename = f"{img_file.stem}_UP{i}.png"
+                        out_img.save(out_path / filename)
+
+                    transformed = inverted(image)
+                    
+                    for i, img in enumerate(transformed):    
+                        # Save
+                        out_img = TF.to_pil_image(img.clamp(0, 1))
+                        filename = f"{img_file.stem}_INV{i}.png"
+                        out_img.save(out_path / filename)
+        
+    else:
+        print(f"'{img_path}' does not exist.")
+                    
+                
+            

@@ -4,7 +4,7 @@ from PIL import Image
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
-from transformation import *
+# from transformation import *
 from trans import Pipeline
 
 print("Environment Initialized")
@@ -16,7 +16,7 @@ IDENTITY_COUNTS = [4, 8]
 
 def process_dataset(
     dataset: str = DEFAULT_DATASET,
-    root_dir: str = "data",
+    root_dir: str = "data/cleaned_faces_dataset/data/",
     processed_dir: str = "processed_data"
 ):
     """
@@ -41,7 +41,7 @@ def process_dataset(
     dest = Path(processed_dir).expanduser()
 
     # Determine subdirectories to process
-    if dataset == "faces":
+    if dataset == "faces" or dataset == 'dogs1k':
         base = root / dataset / dataset
         sub_dirs = [base / f"{n}_identities" for n in IDENTITY_COUNTS]
     else:
@@ -88,8 +88,8 @@ def process_dataset(
                         filename = f"{img_file.stem}_proc{i}.png"
                         out_img.save(out_label / filename)
                     break
-                break
-            break
+                
+            
         break
     
 
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         process_dataset(sys.argv[1])
     else:
-        process_dataset()
+        process_dataset(dataset='dogs1k', root_dir='data/')

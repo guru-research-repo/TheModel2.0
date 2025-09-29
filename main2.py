@@ -17,8 +17,8 @@ def main(lp = True, dataset_name: str = "faces"):
     dataset_name    = dataset_name
     identity_counts = [4, 8, 16, 32, 64, 128]
     splits          = ["train", "valid", "test"]
-    total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
+    total_epochs    = epoch_block * len(identity_counts)
     num_gpu         = 1
     num_workers     = 4
 
@@ -74,7 +74,7 @@ def main(lp = True, dataset_name: str = "faces"):
         # 2) re-create loaders for this identity
         train_loader = DataLoader(
             all_datasets[ident]["train"],
-            batch_size=batch_size // n_crops,
+            batch_size=batch_size ,#// n_crops,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=True
@@ -147,17 +147,22 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in valid_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                # label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
                 # print(label_ids.shape)
                 weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
-
+                B, C,H,W = inputs.shape
                 # transform input data
                 inputs = valPipeline(inputs)
                 outputs = model(inputs)
-                preds = outputs.argmax(dim=1)
+                outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
+                outputs = outputs.sum(dim=1)
+                newpreds = outputs.argmax(dim=1)
+                
                 # preds.shape = (B * N,), change to (B, N)
+                # preds = torch.reshape(preds, (n_crops, -1)).transpose(0,1)
+
                 # get best overall choice out of group of crops/salience
-                newpreds = torch.tensor(weighted_mode(torch.reshape(preds, (-1, n_crops)), weights)).to(device)
+                # newpreds = torch.tensor(weighted_mode(preds, weights)).to(device)
                 
                 batch_acc = (newpreds == label_ids).float().mean().item()
                 valid_accs.append(batch_acc)
@@ -173,16 +178,20 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                # label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
                 weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
                 
                 # transform input data
+                B, C,H,W = inputs.shape
                 inputs = testPipeline(inputs)
                 outputs = model(inputs)
-                preds = outputs.argmax(dim=1)
+                outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
+                outputs = outputs.sum(dim=1)
+                newpreds = outputs.argmax(dim=1)
+                # preds = torch.reshape(preds, (n_crops, -1)).transpose(0,1)
 
                 # get best overall choice out of group of crops/salience
-                newpreds = torch.tensor(weighted_mode(torch.reshape(preds, (-1, n_crops)), weights)).to(device)
+                # newpreds = torch.tensor(weighted_mode(preds, weights)).to(device)
                 batch_acc = (newpreds == label_ids).float().mean().item()
                 test_accs.append(batch_acc)
 
