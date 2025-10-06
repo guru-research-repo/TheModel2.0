@@ -27,7 +27,10 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     idx_gpu         = 5   # The index of GPU that this task is about to run on
     batch_size      = 4  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
     lr              = 1e-3
-    device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
+    # device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
+    device = torch.device(f"cuda:{0}" if torch.cuda.is_available() and torch.cuda.device_count() > 0 else "cpu")
+
+    print('Device: ', device)
 
     # ------------------------------------------------------------------------
     # 1) Helper to map an epoch → identity
@@ -192,11 +195,17 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     torch.save(model.state_dict(), f"output/resnet18_{'lp' if lp else 'cnn'}_{ts}.pth")
 
 if __name__ == "__main__":
+    print('GPU Available: ', torch.cuda.is_available())
+    print('Device count: ', torch.cuda.device_count())
+    print('Current device: ', torch.cuda.current_device())
+    print('Device name: ', torch.cuda.get_device_name(0))
+    
     # main(lp=True)
-    # for i in range(5):
-    #     print(f"starting LP {i}...")
-    #     main(lp=True, dataset_name="salience", faces_data="updated") 
 
     for i in range(5):
-        print(f"starting CNN {i}...")
-        main(lp=False, dataset_name="salience", faces_data="cnn")
+        print(f"starting LP {i}...")
+        main(lp=True, dataset_name="salience", faces_data="updated") 
+
+    # for i in range(5):
+    #     print(f"starting CNN {i}...")
+    #     main(lp=False, dataset_name="salience", faces_data="cnn")
