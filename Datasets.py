@@ -10,7 +10,7 @@ def load_dataset(dataset, identity=4, task="train"):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
-        ds = CelebrityFacesDataset(root_dir="data/cleaned_faces_dataset/data", num_identities=identity, split=task, type="faces")
+        ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type="faces_cleaned")
     else:
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds

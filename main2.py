@@ -21,6 +21,13 @@ def main(lp = True, dataset_name: str = "faces"):
     total_epochs    = epoch_block * len(identity_counts)
     num_gpu         = 1
     num_workers     = 4
+    
+    # Hyper‑parameters
+    history         = []
+    batch_size      = 64
+    lr              = 1e-3
+    device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    n_crops         = 4
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
@@ -41,13 +48,6 @@ def main(lp = True, dataset_name: str = "faces"):
     # ------------------------------------------------------------------------
     # 3) Training loop
     # ------------------------------------------------------------------------
-
-    # Hyper‑parameters
-    history         = []
-    batch_size      = 64
-    lr              = 1e-3
-    device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    n_crops         = 4
 
     model = Model(size=180)
 
@@ -147,15 +147,15 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in valid_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                # label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
                 # print(label_ids.shape)
-                weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
-                B, C,H,W = inputs.shape
+                # weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
+                # B, C,H,W = inputs.shape
                 # transform input data
                 inputs = valPipeline(inputs)
                 outputs = model(inputs)
-                outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
-                outputs = outputs.sum(dim=1)
+                # outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
+                # outputs = outputs.sum(dim=1)
                 newpreds = outputs.argmax(dim=1)
                 
                 # preds.shape = (B * N,), change to (B, N)
@@ -178,15 +178,15 @@ def main(lp = True, dataset_name: str = "faces"):
             for inputs, labels in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                # label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
-                weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
+                label_ids = label_ids.repeat(n_crops) # repeat because of cropping N times
+                # weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
                 
                 # transform input data
-                B, C,H,W = inputs.shape
+                # B, C,H,W = inputs.shape
                 inputs = testPipeline(inputs)
                 outputs = model(inputs)
-                outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
-                outputs = outputs.sum(dim=1)
+                # outputs = torch.reshape(outputs, (n_crops, B, -1)).transpose(0,1)
+                # outputs = outputs.sum(dim=1)
                 newpreds = outputs.argmax(dim=1)
                 # preds = torch.reshape(preds, (n_crops, -1)).transpose(0,1)
 

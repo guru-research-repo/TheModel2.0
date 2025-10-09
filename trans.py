@@ -30,13 +30,6 @@ class Normalize(torch.nn.Module):
     """
     Given an image tensor, return a z-score normalized tensor.
 
-    Args:
-        n (int): Number of crops
-        crop_size: Output image shape.
-        data: input data tensor of size (B, C, W, H)
-
-    Returns:
-        torch.Tensor: Randomly cropped patches of shape (N, C, W, H)
     """
     def __init__(self):
         super().__init__()
@@ -45,7 +38,7 @@ class Normalize(torch.nn.Module):
         # normalize = T.Normalize(
         #             mean = (0.485, 0.456, 0.406),
         #             std = (0.229, 0.224, 0.225))
-        # normalizes over image, use dim=[2,3] to normalize per channel (seems to perform worse)
+        # normalizes over image, use dim=[2,3] to normalize per channel (not recommended)
         mean = data.mean(dim=[1,2,3], keepdim=True)
         std = data.std(dim=[1,2,3], keepdim=True)
         out = (data - mean) / (std + 1e-5)

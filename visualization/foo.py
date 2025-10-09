@@ -8,6 +8,7 @@ for fpath in glob.glob("*.csv"):
         df = pd.read_csv(fpath, usecols=['epoch', 'train_mean', 'valid_mean', 'test_mean'])
         df['source_file'] = fpath
         df_list.append(df)
+        print(fpath)
     except ValueError:
         print(f"⚠️ Skipped '{fpath}': required columns not found.")
 
