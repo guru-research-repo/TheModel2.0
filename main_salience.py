@@ -191,9 +191,9 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
                     "test_std":    test_std,
                 })
         # take best of last 5 epochs
-        best_train = max(history[-5:], key=lambda item: item['train_mean'])
-        best_val = max(history[-5:], key=lambda item: item['valid_mean'])
-        best_test = max(history[-5:], key=lambda item: item['test_mean'])
+        best_train = max(history[-5:], key=lambda item: item['train_mean'])['train_mean']
+        best_val = max(history[-5:], key=lambda item: item['valid_mean'])['val_mean']
+        best_test = max(history[-5:], key=lambda item: item['test_mean'])['test_mean']
         
         history_acc.append({
             "fixation_points":  s,
@@ -221,10 +221,10 @@ if __name__ == "__main__":
     
     # main(lp=True)
 
-    for i in range(5):
-        print(f"starting LP {i}...")
-        main(lp=True, dataset_name="salience", faces_data="updated") 
-
     # for i in range(5):
-    #     print(f"starting CNN {i}...")
-    #     main(lp=False, dataset_name="salience", faces_data="cnn")
+    #     print(f"starting LP {i}...")
+    #     main(lp=True, dataset_name="salience", faces_data="updated") 
+
+    for i in range(5):
+        print(f"starting CNN {i}...")
+        main(lp=False, dataset_name="salience", faces_data="cnn")
