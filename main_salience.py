@@ -18,7 +18,7 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     dataset_name    = dataset_name
     faces_data      = faces_data
     identity_counts = [32]
-    salient_counts  = [4, 8, 16, 32, 64, 128]
+    salient_counts  = [4, 8, 16, 32, 64]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = 40#epoch_block * len(salient_counts)
@@ -192,7 +192,7 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
                 })
         # take best of last 5 epochs
         best_train = max(history[-5:], key=lambda item: item['train_mean'])['train_mean']
-        best_val = max(history[-5:], key=lambda item: item['valid_mean'])['val_mean']
+        best_val = max(history[-5:], key=lambda item: item['valid_mean'])['valid_mean']
         best_test = max(history[-5:], key=lambda item: item['test_mean'])['test_mean']
         
         history_acc.append({

@@ -1,5 +1,6 @@
 # %%
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 num_ident = 32 # number of identities trained on
@@ -20,16 +21,19 @@ test = df['test_mean'].values
 test_std = df['test_std'].values
 
 fig, ax = plt.subplots()
+width = 0.25
+x = np.arange(len(fixs))
 
 # Plot bars w/ std
-ax.bar(fixs, train, label='Train', color='tab:blue', yerr=train_std)
-ax.bar(fixs, valid, label='Upright', color='tab:orange', yerr=valid_std)
-ax.bar(fixs, test, label='Inverted', color='tab:green', yerr=test_std)
+ax.bar(x+0*width, train, label='Train', color='tab:blue', width=width, yerr=train_std)
+ax.bar(x+1*width, valid, label='Upright', color='tab:orange', width=width, yerr=valid_std)
+ax.bar(x+2*width, test, label='Inverted', color='tab:green', width=width, yerr=test_std)
 
 # Labels and legend
 ax.set_xlabel('Number of Fixation Points')
 ax.set_ylabel('Accuracy')
 ax.set_title(f' {title} on {num_ident} Identities - {sal}')
+ax.set_xticks(x + width, fixs)
 ax.legend()
 ax.grid(True)
 
