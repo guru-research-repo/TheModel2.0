@@ -3,7 +3,7 @@ import pandas as pd
 
 num_ident = 32 # number of identities trained on
 # num_fix = 64 # number of fixation poitns trained on 
-sal = 'CNN' # LP or CNN
+sal = 'LP' # LP or CNN
 
 # Collect data from all CSV files in the current directory
 df_list = []
