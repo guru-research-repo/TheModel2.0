@@ -27,19 +27,19 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
 def make_datasets(ident, num_salient_points, faces_data="updated"):
     return {
         "train": SalienceDataset(
-            root_dir=f"processed_data/salience/{faces_data}_faces",
+            root_dir=f"processed_data/salience1/{faces_data}_faces",
             num_identities=ident,
             split="train",
             num_salient_points=num_salient_points
         ),
         "valid": SalienceDataset(
-            root_dir=f"processed_data/salience/{faces_data}_faces",
+            root_dir=f"processed_data/salience1/{faces_data}_faces",
             num_identities=ident,
             split="valid",
             num_salient_points=num_salient_points
         ),
         "test": SalienceDataset(
-            root_dir=f"processed_data/salience/{faces_data}_faces",
+            root_dir=f"processed_data/salience1/{faces_data}_faces",
             num_identities=ident,
             split="test",
             num_salient_points=num_salient_points

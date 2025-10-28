@@ -20,6 +20,8 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import numpy as np
 import mediapipe as mp
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 from trans import *
 from PIL import Image
 
@@ -151,7 +153,6 @@ class SaliencePipeline(torch.nn.Module):
         self.crop = RandomCrop(n=n_crops, crop_size=img_size)
 
         self.kernels = self.get_kernels()
-        self.num_kernels = len(self.kernels)
 
     # Get kernels for gabor filters, each in different direction TODO: test out reducing the number of these!
     def get_kernels(self):
@@ -166,9 +167,16 @@ class SaliencePipeline(torch.nn.Module):
         for l in range(len(lambd)):
             for p in range(len(psi)):
                 for t in range(len(theta)):
-                    kernels.append(cv2.getGaborKernel(size, sigma[l], theta[t], lambd[l], gamma, psi[p]))
-            
-        return kernels
+                    kernels.append(cv2.getGaborKernel(size, sigma[l], theta[t], lambd[l], gamma, psi[p], ktype=cv2.CV_32F))
+
+        self.num_kernels = len(kernels)
+        stacked_filters = torch.from_numpy(np.stack(kernels)).unsqueeze(1) 
+
+        # Create a single Conv2d layer to apply all filters
+        filters = torch.nn.Conv2d(in_channels=1, out_channels=self.num_kernels, kernel_size=31, padding='same', bias=False)
+        filters.weight.data = stacked_filters
+
+        return filters
 
 
     def sample_salience_points(self, img, center = None):
@@ -176,9 +184,9 @@ class SaliencePipeline(torch.nn.Module):
         filtered = []#np.zeros((len(self.kernels), h, w))
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        out_img = TF.to_pil_image(img)
-        filename = f"out/img_proc_original.png"
-        out_img.save(filename)
+        # out_img = TF.to_pil_image(img)
+        # filename = f"out/img_proc_original.png"
+        # out_img.save(filename)
 
         # gaussian mask
         if center is None:
@@ -192,13 +200,20 @@ class SaliencePipeline(torch.nn.Module):
         y_grid, x_grid = torch.meshgrid(y, x, indexing='ij')
         gaussian_mask = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * (w/6)**2))
 
-        weighted_img = gaussian_mask * img
-        weighted_img = (weighted_img - weighted_img.min()) / (weighted_img.max() - weighted_img.min())
+        weighted_img = (gaussian_mask * img).to(self.device)
+        # weighted_img = (weighted_img - weighted_img.min()) / (weighted_img.max() - weighted_img.min())
+        # out_img = TF.to_pil_image(weighted_img)
+        # filename = f"out/img_proc_weighted.png"
+        # out_img.save(filename)
         
-        for i in range(self.num_kernels):
-            f = (cv2.filter2D(np.array(weighted_img), cv2.CV_32F, self.kernels[i]))
-            f = (f - np.mean(f)) / np.std(f)
-            filtered.append(f)
+        filtered = self.kernels(weighted_img.unsqueeze(0))
+        filtered = (filtered - torch.mean(filtered, dim=(1,2), keepdim=True)) / (torch.std(filtered, dim=(1,2), keepdim=True)+1e-9)
+
+        # gabor filters
+        # for i in range(self.num_kernels):
+        #     f = (cv2.filter2D(np.array(weighted_img), cv2.CV_32F, self.kernels[i]))
+        #     f = (f - np.mean(f)) / np.std(f)
+        #     filtered.append(f)
             # out_img = TF.to_pil_image(filtered[i].astype(np.uint8))
             # filename = f"out/img_proc_filtered-{i}.png"
             # out_img.save(filename)
@@ -207,16 +222,17 @@ class SaliencePipeline(torch.nn.Module):
         # mag = []
         # for i in range(self.num_kernels//2):
         #     mag.append(np.sqrt(filtered[i]**2 + filtered[i+self.num_kernels//2]**2))
+
         # calculate variance
-        variance = torch.var(torch.from_numpy(np.array(filtered, dtype=np.float32)), dim=0)
+        variance = torch.var(filtered, dim=0)**2
         variance = (variance - variance.min()) / (variance.max() - variance.min())
-        out_img = TF.to_pil_image(variance)
-        filename = f"out/img_proc_variance.png"
-        out_img.save(filename)
+        # out_img = TF.to_pil_image(variance)
+        # filename = f"out/img_proc_variance332.png"
+        # out_img.save(filename)
 
         weights = variance.flatten(start_dim=-2, end_dim=-1)
         features = torch.multinomial(weights, self.num_salient_points)
-        return torch.stack(torch.unravel_index(features, variance.shape), dim=-1)
+        return torch.stack(torch.unravel_index(features, variance.shape)[::-1], dim=-1)
     
     def forward(self, img): 
         assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
@@ -252,7 +268,8 @@ class SaliencePipeline(torch.nn.Module):
     
 
 if __name__ == "__main__":
-    img_path = 'data/faces_cleaned/faces_cleaned/4_identities/test/EmmanuelMacron/183.jpg' # image or directory of images
+    id = 332
+    img_path = f'data/faces_cleaned/faces_cleaned/4_identities/test/EmmanuelMacron/{id}.jpg' # image or directory of images
     
     img_path = Path(img_path).expanduser()
 
@@ -264,7 +281,18 @@ if __name__ == "__main__":
                 print('error')
                 exit(0)
 
-            tensor_img = TF.to_tensor(image).unsqueeze(0)
-            pipeline = SaliencePipeline('train')
-            pipeline(tensor_img)
+            tensor_img = TF.to_tensor(image)
+            tensor_img = (tensor_img.permute(1,2,0).numpy() * 255).astype(np.uint8) 
+            points = SaliencePipeline('train', num_salient_points=64).sample_salience_points(tensor_img)
+            
+            img = mpimg.imread(img_path)
+            fig, ax = plt.subplots()
 
+            # Display the image on the axes
+            ax.imshow(image)
+
+            # Plot the points on the image
+            # 'o' specifies a circular marker, 'r' sets the color to red
+            # You can customize marker style, color, size, etc.
+            ax.plot(points[:,0], points[:,1], 'o', color='red', markersize=4)
+            plt.savefig(f'./out/img_proc_points_{id}.png')
