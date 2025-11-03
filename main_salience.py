@@ -56,6 +56,9 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = torch.nn.CrossEntropyLoss()
 
+        valid_batch_size = batch_size // s
+
+
         for epoch in range(1, total_epochs + 1):
             # 1) figure out which identity we're on & how many salient points to use
             ident = identity_for_epoch(epoch)
@@ -73,14 +76,14 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
             )
             valid_loader = DataLoader(
                 datasets["valid"],
-                batch_size=batch_size,
+                batch_size=valid_batch_size,
                 shuffle=False,
                 num_workers=num_workers,
                 pin_memory=True
             )
             test_loader  = DataLoader(
                 datasets["test"],
-                batch_size=batch_size,
+                batch_size=valid_batch_size,
                 shuffle=False,
                 num_workers=num_workers,
                 pin_memory=True
