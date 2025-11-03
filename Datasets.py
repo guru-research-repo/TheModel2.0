@@ -26,7 +26,7 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
 # Used only for salience training
 def make_datasets(ident, num_salient_points, faces_data="updated"):
     return {
-        "train": SalienceDataset(
+        "train": SalienceDatasetBatched(
             root_dir=f"processed_data/salience1/{faces_data}_faces",
             num_identities=ident,
             split="train",
@@ -282,3 +282,55 @@ class SalienceDataset(Dataset):
 
         label = label_to_one_hot(label, self.map)
         return imgs, label
+    
+
+"""
+Rather than returning all fixations in the same image at once, 
+compile the dataset as normal, such that a random number are present in each mini-batch.
+"""
+class SalienceDatasetBatched(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str,
+                 num_salient_points: int = 4):
+        """
+        Args:
+            root_dir (str): base path, e.g. "processed_data/salience/updated_faces"
+            num_identities (int): e.g. 32
+            split (str): one of "train", "valid", "test"
+            num_salient_points (int): how many processed variants per base image
+        """
+        self.num_salient_points = num_salient_points
+
+        # build the path to e.g. ".../faces/32_identities/train"
+        self.data_dir = os.path.join(root_dir, f"{num_identities}_identities", split)
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+        # list all identity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        self.map = get_label_mapping(type="faces")
+
+        # Collect base images and all their processed variants
+        self.samples = []  # [(path, label), ...]
+
+        for ident in self.classes:
+            ident_dir = os.path.join(self.data_dir, ident)
+
+            for fname in os.listdir(ident_dir):
+                for i in range(num_salient_points):
+                    if fname.endswith(f'c{i}.png'): # "procX.png" or "procXX.png"
+                        self.samples.append((os.path.join(ident_dir, fname), ident))
+
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        img = TF.to_tensor(Image.open(path).convert("RGB"))
+
+        label = label_to_one_hot(label, self.map)
+        return img, label

@@ -25,7 +25,7 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     num_gpu         = 1
     num_workers     = 4
     idx_gpu         = 5   # The index of GPU that this task is about to run on
-    batch_size      = 16  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
+    batch_size      = 1024  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
     lr              = 1e-3
     # device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
     device = torch.device(f"cuda:{0}" if torch.cuda.is_available() and torch.cuda.device_count() > 0 else "cpu")
@@ -49,13 +49,12 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     history         = []
     history_acc     = []
     for s in salient_counts:
+        torch.cuda.empty_cache()
         model = Model(size=224) if faces_data == 'updated' else Model(size=180)
         model = model.to(device)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = torch.nn.CrossEntropyLoss()
-
-        batch_size = 1024 // s # same number of images per batch (for now)
 
         for epoch in range(1, total_epochs + 1):
             # 1) figure out which identity we're on & how many salient points to use
@@ -103,14 +102,11 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
 
                 # if labels are one‑hot (B, C), convert to class indices (B,)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                # repeat because we have num_salient_pts-many images
-                label_ids = label_ids.repeat_interleave(num_salient_points) 
 
-                B,n,C,H,W = inputs.shape
-                inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
+                B,C,H,W = inputs.shape
         
                 optimizer.zero_grad()
-                outputs = model(inputs) #(B*num_salience_pts, output_dim)
+                outputs = model(inputs) # (B, output_dim)
                 
                 loss = criterion(outputs, label_ids)
                 loss.backward()
