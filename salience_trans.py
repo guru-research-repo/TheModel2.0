@@ -122,7 +122,7 @@ def sample_facial_feature_points_weighted(feature_dict, num_points=1):
 
 class SaliencePipeline(torch.nn.Module):
     def __init__(self, type='train', device='cpu', logpolar=True, img_size=224, 
-                 output_shape=(224, 224), num_salient_points=4, n_crops=4):
+                 output_shape=(224, 224), num_salient_points=4):
         """
         Pipeline that rotates, foveates, and log-polar transforms around a salient point (LP)
             or crops then rotates around a salient point (CNN).
@@ -140,7 +140,7 @@ class SaliencePipeline(torch.nn.Module):
         self.num_salient_points = num_salient_points
         self.device = device
         self.type = type
-        self.n_crops = n_crops
+        self.crop_size = 180
         
         self.foveate = Foveate() if logpolar else torch.nn.Identity()
         self.logpolar = LogPolar(
@@ -148,9 +148,6 @@ class SaliencePipeline(torch.nn.Module):
             output_shape=output_shape,
             device=device
         ) if logpolar else torch.nn.Identity()
-
-        self.lp_true = logpolar
-        self.crop = RandomCrop(n=n_crops, crop_size=img_size)
 
         self.kernels = self.get_kernels()
 
@@ -238,33 +235,38 @@ class SaliencePipeline(torch.nn.Module):
         assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
         
         img = img.to(self.device)
-        img = self.crop(img) if not self.lp_true else img #crop if CNN
+        # img = self.crop(img) if not self.lp_true else img #crop if CNN
         B,C,H,W = img.shape
         img_np = (img.permute(0,2,3,1).cpu().numpy() * 255).astype(np.uint8) 
-        transformed_imgs = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
+        transformed_imgs_lp = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
+        transformed_imgs_cnn = torch.zeros((B,self.num_salient_points,C,self.crop_size,self.crop_size),device=self.device)
 
         # Loop through each identity in batch
         for b in range(B): 
             salient_points = self.sample_salience_points(img_np[b])
-
             for salient_idx, center in enumerate(salient_points):
+                # todo: do we want to crop lp as well?
+                transformed_img_cnn = TF.crop(img[b],
+                                               top=center[1]-self.crop_size//2,
+                                               left=center[0]-self.crop_size//2, 
+                                               height=self.crop_size, width=self.crop_size)
                 if self.type == 'train':
-                    if self.lp_true:
-                        angle=torch.empty(1).uniform_(-15,15).item() #sample value in range [-15,15]
-                        transformed_img = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
-                    else:
-                        angle=torch.empty(B).uniform_(-15,15) #sample n_crops-many values in range [-15,15]
-                        transformed_img = TF.rotate(img[b],angle=angle[b].item(),center=(center[0],center[1]))
+                    angle=torch.empty(1).uniform_(-15,15).item() #sample value in range [-15,15]
+                    transformed_img_lp = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
+                    
+                    transformed_img_cnn = TF.rotate(transformed_img_cnn,angle=angle)
                 elif self.type == 'test': 
-                    transformed_img = TF.rotate(img[b],angle=180) # invert test images
+                    transformed_img_lp = TF.rotate(img[b],angle=180) # invert test images
+                    transformed_img_cnn = TF.rotate(transformed_img_cnn,angle=180) # invert test images
                 else:
-                    transformed_img = img[b].clone()
-                if self.lp_true:
-                    transformed_img = self.foveate(transformed_img.unsqueeze(0), center=tuple(center)) # (3,224,224) --> Foveate expects batch
-                    transformed_img = self.logpolar(transformed_img, center_x=center[0], center_y=center[1]) # (3,224,224)
-                transformed_imgs[b,salient_idx] = transformed_img
+                    transformed_img_lp = img[b].clone()
+                    transformed_img_cnn = transformed_img_cnn.clone()
+                transformed_img_lp = self.foveate(transformed_img_lp.unsqueeze(0), center=tuple(center)) # (3,224,224) --> Foveate expects batch
+                transformed_img_lp = self.logpolar(transformed_img_lp, center_x=center[0], center_y=center[1]) # (3,224,224)
+                transformed_imgs_lp[b,salient_idx] = transformed_img_lp
+                transformed_imgs_cnn[b,salient_idx] = transformed_img_cnn
                 
-        return transformed_imgs
+        return transformed_imgs_lp, transformed_imgs_cnn
     
 
 if __name__ == "__main__":
