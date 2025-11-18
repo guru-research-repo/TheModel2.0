@@ -23,9 +23,9 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = 40#epoch_block * len(salient_counts)
     num_gpu         = 1
-    num_workers     = 4
+    num_workers     = 16
     idx_gpu         = 5   # The index of GPU that this task is about to run on
-    batch_size      = 1024  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
+    batch_size      = 256  # bs --> fix: 64 --> 4, 8; 16 --> 16; 8 --> 32; 4 --> 64
     lr              = 1e-3
     # device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
     device = torch.device(f"cuda:{0}" if torch.cuda.is_available() and torch.cuda.device_count() > 0 else "cpu")
@@ -50,7 +50,8 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     history_acc     = []
     for s in salient_counts:
         torch.cuda.empty_cache()
-        model = Model(size=224) if faces_data == 'updated' else Model(size=180)
+        # model = Model(size=224) if faces_data == 'updated' else Model(size=180)
+        model = Model_R18(size=224) if faces_data == 'updated' else Model_R18(size=180)
         model = model.to(device)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
