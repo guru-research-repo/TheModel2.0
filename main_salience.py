@@ -10,13 +10,12 @@ from trans import Pipeline
 from salience_trans import SaliencePipeline
 
 
-def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
+def main(lp = True, dataset_name: str = "salience"):
     os.makedirs("output", exist_ok=True)
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
-    faces_data      = faces_data
     identity_counts = [32]
     salient_counts  = [4, 8, 16, 32, 64]
     splits          = ["train", "valid", "test"]
@@ -50,8 +49,7 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
     history_acc     = []
     for s in salient_counts:
         torch.cuda.empty_cache()
-        # model = Model(size=224) if faces_data == 'updated' else Model(size=180)
-        model = Model_R18(size=224) if faces_data == 'updated' else Model_R18(size=180)
+        model = Model(size=224) if lp else Model(size=180)
         model = model.to(device)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -63,10 +61,10 @@ def main(lp = True, dataset_name: str = "salience", faces_data = "updated"):
         for epoch in range(1, total_epochs + 1):
             # 1) figure out which identity we're on & how many salient points to use
             ident = identity_for_epoch(epoch)
-            num_salient_points = s #salient_points_for_epoch(epoch)
+            num_salient_points = s
 
             # 2) re-create loaders for this identity
-            datasets = make_datasets(ident, num_salient_points, faces_data)
+            datasets = make_datasets(ident, num_salient_points, lp)
 
             train_loader = DataLoader(
                 datasets["train"],
@@ -223,8 +221,8 @@ if __name__ == "__main__":
 
     # for i in range(5):
     #     print(f"starting LP {i}...")
-    #     main(lp=True, dataset_name="salience", faces_data="updated") 
+    #     main(lp=True, dataset_name="salience") 
 
     for i in range(5):
         print(f"starting CNN {i}...")
-        main(lp=False, dataset_name="salience", faces_data="cnn")
+        main(lp=False, dataset_name="salience")

@@ -7,7 +7,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import numpy as np
 
-def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
+def load_dataset(dataset, identity=4, task="train", num_salient_points=4, lp = True):
     if dataset == "celeb":
         ds = CelebAFaceIDDataset(root_dir="processed_data", split=task)
     elif dataset == "faces":
@@ -15,31 +15,30 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4):
     elif dataset == "objects":
         ds = ImageNetObjectsDataset(root_dir="processed_data", num_classes=identity, split=task)
     elif dataset == "salience":
-        ds = SalienceDataset(root_dir="processed_data/salience/updated_faces", 
-                             num_identities=32, 
-                             split=task, 
-                             num_salient_points=num_salient_points)
+        ds = make_datasets(ident=identity, num_salient_points=num_salient_points, lp=lp)
     else:
         ds = CelebrityFacesDataset(root_dir="data", num_identities=identity, split=task, type=dataset)
     return ds
 
 # Used only for salience training
-def make_datasets(ident, num_salient_points, faces_data="updated"):
+def make_datasets(ident, num_salient_points, lp = True):
+    root = "processed_data/salience1/updated_faces" if lp else "processed_data/salience1/cnn_faces"
+
     return {
         "train": SalienceDatasetBatched(
-            root_dir=f"processed_data/salience1/{faces_data}_faces",
+            root_dir=root,
             num_identities=ident,
             split="train",
             num_salient_points=num_salient_points
         ),
         "valid": SalienceDataset(
-            root_dir=f"processed_data/salience1/{faces_data}_faces",
+            root_dir=root,
             num_identities=ident,
             split="valid",
             num_salient_points=num_salient_points
         ),
         "test": SalienceDataset(
-            root_dir=f"processed_data/salience1/{faces_data}_faces",
+            root_dir=root,
             num_identities=ident,
             split="test",
             num_salient_points=num_salient_points

@@ -16,11 +16,12 @@ import main_salience
     #save each transformed image in subdir w/ img#_proc#
 
 num_identities = 32
+root = 'salience'
 # for faces_data in ['updated', 'cnn']: # create LP dataset and CNN dataset
 for split in ['test', 'train', 'valid']: 
     split_dir = Path(f'data/faces_cleaned/faces_cleaned/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
-    updated_save_dir = Path(f'processed_data/salience1/updated_faces/{num_identities}_identities/{split}')
-    cnn_save_dir = Path(f'processed_data/salience1/cnn_faces/{num_identities}_identities/{split}')
+    updated_save_dir = Path(f'processed_data/{root}/updated_faces/{num_identities}_identities/{split}')
+    cnn_save_dir = Path(f'processed_data/{root}/cnn_faces/{num_identities}_identities/{split}')
     
     updated_save_dir.mkdir(parents=True, exist_ok=True)
     cnn_save_dir.mkdir(parents=True, exist_ok=True)
@@ -31,8 +32,8 @@ for split in ['test', 'train', 'valid']:
     # Get directory for the current split
     for label_dir in split_dir.iterdir(): # folder of images for each person
         #Make subdir for each person in save_dir 
-        Path(f'processed_data/salience1/updated_faces/{num_identities}_identities/{split}/{label_dir.name}').mkdir(parents=True, exist_ok=True)
-        Path(f'processed_data/salience1/cnn_faces/{num_identities}_identities/{split}/{label_dir.name}').mkdir(parents=True, exist_ok=True)
+        Path(f'processed_data/{root}/updated_faces/{num_identities}_identities/{split}/{label_dir.name}').mkdir(parents=True, exist_ok=True)
+        Path(f'processed_data/{root}/cnn_faces/{num_identities}_identities/{split}/{label_dir.name}').mkdir(parents=True, exist_ok=True)
         print('label_dir: ', label_dir)
         for img_path in label_dir.iterdir(): # image paths for each person
             img_pil = Image.open(img_path).convert("RGB") # load image as PIL object
@@ -43,11 +44,11 @@ for split in ['test', 'train', 'valid']:
             
             for n, transformed_img_tensor in enumerate(transformed_imgs_lp[0]): #torch.tensor (C,H,W). note: batch_size=1 from unsqueeze above.
                 transformed_img_pil = TF.to_pil_image(transformed_img_tensor.clamp(0, 1)) #convert tensor to PIL Image
-                file_path = f'processed_data/salience1/updated_faces/{num_identities}_identities/{split}/{label_dir.name}/{img_path.stem}_proc{n}.png'
+                file_path = f'processed_data/{root}/updated_faces/{num_identities}_identities/{split}/{label_dir.name}/{img_path.stem}_proc{n}.png'
                 transformed_img_pil.save(file_path) #save PIL image
             for n, transformed_img_tensor in enumerate(transformed_imgs_cnn[0]): #torch.tensor (C,H,W). note: batch_size=1 from unsqueeze above.
                 transformed_img_pil = TF.to_pil_image(transformed_img_tensor.clamp(0, 1)) #convert tensor to PIL Image
-                file_path = f'processed_data/salience1/cnn_faces/{num_identities}_identities/{split}/{label_dir.name}/{img_path.stem}_proc{n}.png'
+                file_path = f'processed_data/{root}/cnn_faces/{num_identities}_identities/{split}/{label_dir.name}/{img_path.stem}_proc{n}.png'
                 transformed_img_pil.save(file_path) #save PIL image
 
 # start LP test when done
