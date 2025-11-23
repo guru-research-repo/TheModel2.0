@@ -5,6 +5,7 @@ import torch
 from trans import *
 from salience_trans import *
 import main_salience
+from Datasets import *
 
 # Step 1: Load raw datasets
     # assumes data is stored in data/faces_cleaned/faces/{num_identities}_identities/{split}/{identity}/img#.jpg
@@ -16,6 +17,7 @@ import main_salience
     #save each transformed image in subdir w/ img#_proc#
 
 num_identities = 32
+num_fixations = 16
 root = 'salience'
 # for faces_data in ['updated', 'cnn']: # create LP dataset and CNN dataset
 for split in ['test', 'train', 'valid']: 
@@ -27,7 +29,7 @@ for split in ['test', 'train', 'valid']:
     cnn_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Create pipeline to transform images
-    pipeline = SaliencePipeline(split, num_salient_points=64) #LP and CNN
+    pipeline = SaliencePipeline(split, num_salient_points=num_fixations) #LP and CNN
 
     # Get directory for the current split
     for label_dir in split_dir.iterdir(): # folder of images for each person
@@ -39,8 +41,6 @@ for split in ['test', 'train', 'valid']:
             img_pil = Image.open(img_path).convert("RGB") # load image as PIL object
             img_tensor = TF.to_tensor(img_pil).unsqueeze(0) # convert to torch.tensor of shape (C,H,W) -> unsqueeze to (1,C,H,W), since pipeline expects batched imgs
             transformed_imgs_lp, transformed_imgs_cnn = pipeline(img_tensor) # torch.tensor(B,N,C,H,W)
-            # if faces_data == 'cnn':
-            #     transformed_imgs = transformed_imgs.permute(1,0,2,3,4)
             
             for n, transformed_img_tensor in enumerate(transformed_imgs_lp[0]): #torch.tensor (C,H,W). note: batch_size=1 from unsqueeze above.
                 transformed_img_pil = TF.to_pil_image(transformed_img_tensor.clamp(0, 1)) #convert tensor to PIL Image
@@ -52,9 +52,18 @@ for split in ['test', 'train', 'valid']:
                 transformed_img_pil.save(file_path) #save PIL image
 
 # start LP test when done
-# for i in range(5):
-#     print(f"starting LP {i}...")
-#     main_salience.main(lp=True, dataset_name="salience", faces_data="updated") 
-# for i in range(5):
-#     print(f"starting CNN {i}...")
-#     main_salience.main(lp=True, dataset_name="salience", faces_data="cnn") 
+for i in range(5):
+    print(f"starting LP {i}...")
+    main_salience.main(lp=True, dataset_name="salience") 
+for i in range(5):
+    print(f"starting CNN {i}...")
+    main_salience.main(lp=False, dataset_name="salience") 
+
+
+# dataset_name = 'faces'
+
+# all_datasets = {
+#     ident: { split: load_dataset(dataset_name, ident, split)
+#             for split in splits }
+#     for ident in identity_counts
+# }

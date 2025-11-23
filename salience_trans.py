@@ -121,8 +121,8 @@ def sample_facial_feature_points_weighted(feature_dict, num_points=1):
 #######################################
 
 class SaliencePipeline(torch.nn.Module):
-    def __init__(self, type='train', device='cpu', logpolar=True, img_size=224, 
-                 output_shape=(224, 224), num_salient_points=4):
+    def __init__(self, type='train', device='cpu', logpolar=True, crop_size=180, 
+                 output_shape=(180, 180), num_salient_points=4):
         """
         Pipeline that rotates, foveates, and log-polar transforms around a salient point (LP)
             or crops then rotates around a salient point (CNN).
@@ -130,24 +130,27 @@ class SaliencePipeline(torch.nn.Module):
         Args:
             type (str): 'train', 'test', or 'valid' --> 'train', 'inverted', or None
             device (str): torch device
-            logpolar (bool): whether to apply log-polar transform
-            img_size (int): image size (LP) or crop size (CNN)
+            logpolar (bool): whether to apply log-polar transform --> IGNORED: currently does both at once
+            crop_size (int): crop size for both LP and CNN
             output_shape (tuple): output shape for log-polar transform
             num_salient_points (int): number of fixations 
-            n_crops (int): number of crops for CNN
         """
         super().__init__()
         self.num_salient_points = num_salient_points
         self.device = device
         self.type = type
-        self.crop_size = 180
+        self.crop_size = crop_size
         
-        self.foveate = Foveate() if logpolar else torch.nn.Identity()
-        self.logpolar = LogPolar(
-            input_shape=(img_size, img_size),
-            output_shape=output_shape,
-            device=device
-        ) if logpolar else torch.nn.Identity()
+        if type == 'train':
+            self.rotate = Rotate()
+        elif type == 'test':
+            self.rotate = Rotate(invert = True)
+        else:
+            self.rotate = torch.nn.Identity()
+
+        self.foveate = Foveate(crop_size=crop_size)
+        self.logpolar = LogPolar(input_shape=(crop_size, crop_size),
+                                output_shape=output_shape, device=device)
 
         self.kernels = self.get_kernels().to(device)
 
@@ -178,88 +181,89 @@ class SaliencePipeline(torch.nn.Module):
 
 
     def sample_salience_points(self, img, center = None):
-        _, h, w = img.shape
-        filtered = []#np.zeros((len(self.kernels), h, w))
+        img = img.to(self.device)
+        B, _, H, W = img.shape
 
         img = TF.rgb_to_grayscale(img, num_output_channels=1)
 
         # gaussian mask
         if center is None:
-            center_x = w / 2 - 0.5
-            center_y = h / 2 - 0.5
+            center_x = W / 2 - 0.5
+            center_y = H / 2 - 0.5
         else:
             center_x, center_y = center
 
-        x = torch.arange(0, w, dtype=torch.float32)
-        y = torch.arange(0, h, dtype=torch.float32)
+        x = torch.arange(0, W, device=self.device)
+        y = torch.arange(0, H, device=self.device)
         y_grid, x_grid = torch.meshgrid(y, x, indexing='ij')
-        gaussian_mask = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * (w/6)**2)).to(self.device)
+        gaussian_mask = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * (W/6)**2))
+        gaussian_mask = gaussian_mask.repeat(B, 1, 1).unsqueeze(1)
+        weighted_img = gaussian_mask * img
 
-        weighted_img = (gaussian_mask * img).to(self.device)
-        
         # apply gabor filters
         with torch.no_grad():
-            filtered = self.kernels(weighted_img.unsqueeze(0))
+            filtered = self.kernels(weighted_img)
 
         # mag=sqrt(real**2, imaginary**2)
         # todo: test if using this is better
-        # filtered = torch.sqrt(filtered[:, :8]**2 + filtered[:,8:]**2)
+        # num_pairs = filtered.shape[1] // 2
+        # filtered = torch.sqrt(filtered[:, :num_pairs]**2 + filtered[:,num_pairs:]**2 + 1e-9)
 
         # normalize
-        filtered = (filtered - torch.mean(filtered, dim=(2,3), keepdim=True)) / (torch.std(filtered, dim=(2,3), keepdim=True)+1e-9)
+        fmean = torch.mean(filtered, dim=(2,3), keepdim=True)
+        fstd = torch.std(filtered, dim=(2,3), keepdim=True)
+        filtered = (filtered - fmean) / (fstd + 1e-9)
 
         # calculate variance
         variance = torch.var(filtered, dim=1)**2
-        variance = (variance - variance.min()) / (variance.max() - variance.min())
-        # out_img = TF.to_pil_image(variance)
+        # normalize per image
+        vmin = variance.amin(dim=(1,2), keepdim=True)
+        vmax = variance.amax(dim=(1,2), keepdim=True)
+        variance = (variance - vmin) / (vmax - vmin + 1e-9)
+        # out_img = TF.to_pil_image(variance[0])
         # filename = f"out/img_proc_variance332.png"
         # out_img.save(filename)
 
         # save top num_salient_points points
-        weights = variance.flatten(start_dim=-2, end_dim=-1)
-        features = torch.multinomial(weights, self.num_salient_points, replacement=False)
-        ys = features // w
-        xs = features % w
-        return torch.stack([xs, ys], dim=-1)
+        coords = torch.zeros(B, self.num_salient_points, 2, device=self.device, dtype=torch.long)
+
+        for b in range(B):
+            flat = variance[b].flatten()
+            idx = torch.multinomial(flat, self.num_salient_points, replacement=False)
+            ys = idx // W
+            xs = idx % W
+            coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
+        return coords # [B, num_points, 2]
     
     def forward(self, img): 
         assert isinstance(img, torch.Tensor), f"Expected Tensor, got {type(img)}."
         
         img = img.to(self.device)
         B,C,H,W = img.shape
-        transformed_imgs_lp = torch.zeros((B,self.num_salient_points,C,H,W),device=self.device)
-        transformed_imgs_cnn = torch.zeros((B,self.num_salient_points,C,self.crop_size,self.crop_size),device=self.device)
+        transformed_imgs = torch.zeros((B,self.num_salient_points,C,self.crop_size,self.crop_size),device=self.device)
 
-        # Loop through each identity in batch
-        for b in range(B): 
-            salient_points = self.sample_salience_points(img[b])
-            for salient_idx, center in enumerate(salient_points[0]):
-                # todo: do we want to crop lp as well?
-                transformed_img_cnn = TF.crop(img[b],
-                                               top=center[1]-self.crop_size//2,
-                                               left=center[0]-self.crop_size//2, 
-                                               height=self.crop_size, width=self.crop_size)
-                if self.type == 'train':
-                    angle=torch.empty(1).uniform_(-15,15).item() #sample value in range [-15,15]
-                    transformed_img_lp = TF.rotate(img[b],angle=angle,center=(center[0],center[1]))
-                    
-                    transformed_img_cnn = TF.rotate(transformed_img_cnn,angle=angle)
-                elif self.type == 'test': 
-                    transformed_img_lp = TF.rotate(img[b],angle=180) # invert test images
-                    transformed_img_cnn = TF.rotate(transformed_img_cnn,angle=180) # invert test images
-                else:
-                    transformed_img_lp = img[b].clone()
-                    transformed_img_cnn = transformed_img_cnn.clone()
-                transformed_img_lp = self.foveate(transformed_img_lp.unsqueeze(0), center=tuple(center)) # (3,224,224) --> Foveate expects batch
-                transformed_img_lp = self.logpolar(transformed_img_lp, center_x=center[0], center_y=center[1]) # (3,224,224)
-                transformed_imgs_lp[b,salient_idx] = transformed_img_lp
-                transformed_imgs_cnn[b,salient_idx] = transformed_img_cnn
-                
-        return transformed_imgs_lp, transformed_imgs_cnn
-    
+        salient_points = self.sample_salience_points(img)
+
+        # crop, we are now centered on each fixation point
+        for b in range(B):
+            for salient_idx, center in enumerate(salient_points[b]):
+                transformed_imgs[b,salient_idx] = TF.crop(img[b],
+                                              top=center[1]-self.crop_size//2,
+                                              left=center[0]-self.crop_size//2, 
+                                              height=self.crop_size, width=self.crop_size)
+        
+        transformed_imgs = transformed_imgs.flatten(0,1) # output shape is (B*N,...), represented as B B B B
+        transformed_imgs = self.rotate(transformed_imgs)
+        transformed_imgs_cnn = transformed_imgs.clone().unflatten(0, (B, self.num_salient_points))
+
+
+        transformed_imgs = self.foveate(transformed_imgs)
+        transformed_imgs = self.logpolar(transformed_imgs).unflatten(0, (B, self.num_salient_points))
+
+        return transformed_imgs, transformed_imgs_cnn # lp, cnn
 
 if __name__ == "__main__":
-    id = 332
+    id = 309
     img_path = f'data/faces_cleaned/faces_cleaned/4_identities/test/EmmanuelMacron/{id}.jpg' # image or directory of images
     
     img_path = Path(img_path).expanduser()
@@ -273,10 +277,9 @@ if __name__ == "__main__":
                 exit(0)
 
             t_image = TF.to_tensor(image)
-            # tensor_img = torch.stack([t_image, t_image]) # 2 images for batch testing
-            points = SaliencePipeline('train', num_salient_points=64).sample_salience_points(t_image)
-            
-            img = mpimg.imread(img_path)
+            tensor_img = torch.stack([t_image, t_image]) # 2 images for batch testing
+            points = SaliencePipeline('train', num_salient_points=64).sample_salience_points(tensor_img)
+
             fig, ax = plt.subplots()
 
             # Display the image on the axes

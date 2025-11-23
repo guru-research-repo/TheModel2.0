@@ -49,7 +49,7 @@ class Rotate(torch.nn.Module):
     or by 180° if inverse=True.
 
     Args:
-        data (torch.Tensor): Input image of shape (C, H, W) or batch (N, C, H, W).
+        data (torch.Tensor): Input image of shape (C, H, W) or batch (B, C, H, W).
         max_deg (float): Maximum absolute rotation angle (±max_deg).
         inverse (bool): If True, rotate by exactly 180° instead of a random angle.
 
@@ -68,18 +68,19 @@ class Rotate(torch.nn.Module):
         return out
 
 class Foveate(torch.nn.Module):
-    def __init__(self): #, crop_size=None, p_val=None, center=None):
+    def __init__(self, crop_size=None, p_val=None, center=None):
         super().__init__()
-        #self.crop_size = crop_size
-        #self.center = (self.crop_size/2, self.crop_size/2) if center is None else center
+        self.crop_size = crop_size
+        self.center = (self.crop_size/2, self.crop_size/2) if center is None else center
 
-    def __call__(self, img, center):
+    def __call__(self, img, center=None):
         """
         Args:
             img: tensor to be foveated.
         Returns:
             tensor: Foveated image.
         """
+        center = center or self.center
         shape = img.shape[:2]
         data = img.flatten(0,1)
         out = self.foveat_img(data, [center]).unflatten(dim=0, sizes=shape).float()
