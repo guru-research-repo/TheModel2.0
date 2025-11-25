@@ -49,7 +49,7 @@ def main(lp = True, dataset_name: str = "salience"):
     history_acc     = []
     for s in salient_counts:
         torch.cuda.empty_cache()
-        model = Model(size=224) if lp else Model(size=180)
+        model = Model(size=180) if lp else Model(size=180)
         model = model.to(device)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
