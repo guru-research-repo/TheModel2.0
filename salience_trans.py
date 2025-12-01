@@ -200,10 +200,19 @@ class SaliencePipeline(torch.nn.Module):
         gaussian_mask = gaussian_mask.repeat(B, 1, 1).unsqueeze(1)
         weighted_img = gaussian_mask * img
 
+        weighted_img, xMap, yMap = self.logpolar.forwardReturnMapping(T.CenterCrop((180,180))(weighted_img))
+        # out_img = TF.to_pil_image(weighted_img[0])
+        # filename = f"out/img_proc_lp332.png"
+        # out_img.save(filename)
         # apply gabor filters
         with torch.no_grad():
             filtered = self.kernels(weighted_img)
-
+        _, _, _, W = filtered.shape
+        # mask out boundaries
+        filtered[...,:10,:] = 0
+        filtered[...,-10:,:] = 0
+        filtered[...,:,:10] = 0
+        filtered[...,:,-10:] = 0
         # mag=sqrt(real**2, imaginary**2)
         # todo: test if using this is better
         # num_pairs = filtered.shape[1] // 2
@@ -232,7 +241,9 @@ class SaliencePipeline(torch.nn.Module):
             idx = torch.multinomial(flat, self.num_salient_points, replacement=False)
             ys = idx // W
             xs = idx % W
-            coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
+            y_actual = yMap[ys,xs] + 22
+            x_actual = xMap[ys,xs] + 22
+            coords[b] = torch.stack([x_actual, y_actual], dim=-1)  # [num_points, 2]
         return coords # [B, num_points, 2]
     
     def forward(self, img): 

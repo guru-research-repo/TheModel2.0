@@ -301,6 +301,66 @@ class LogPolar(torch.nn.Module):
                 up_up_weight * data[...,y_up,x_up]
             )
         )
+    
+    def forwardReturnMapping(self, data, center_x = None, center_y = None):
+        
+        img = data.permute(0, 2, 3, 1)
+        img = (img - img.min()) / (img.max() - img.min())
+        
+        if data.shape[-2:] != self.input_shape:
+            X, Y = self.compute_map(data.shape[-2:], self.output_shape)
+        else:
+            X = self.get_buffer('X')
+            Y = self.get_buffer('Y')
+
+        if not center_x or not center_y:
+            center_y, center_x = self.default_center
+            
+        if self.random_center and random.random() > 0.4 :
+            center_y, center_x = self.SaliencePoints(data)
+            
+        X = center_x + X
+        Y = center_y - Y
+
+        # print("centre", center_x, center_y )
+        mask = (self.compute_mask(X, Y, self.input_shape)  if self.mask else torch.ones_like(X)).to(self.device)
+        # print("mask", mask)
+        if self.smoothing == None:
+            return (
+                mask * (
+                    data[
+                      ...,
+                      Y.long().clamp(0, data.shape[-2] - 1),
+                      X.long().clamp(0, data.shape[-1] - 1),
+                      # Y.long() % (data.shape[-2] - 1),
+                      # X.long() % (data.shape[-1] - 1)
+                    ]
+                )
+            )
+
+        y_down, x_down = Y.long().clamp(0, data.shape[-2] - 1), X.long().clamp(0, data.shape[-1] - 1)
+        y_up, x_up = (y_down+1).clamp(0, data.shape[-2] - 1), (x_down+1).clamp(0, data.shape[-1] - 1)
+        
+        down_down_dist = (Y - y_down)**self.smoothing + (X - x_down)**self.smoothing
+        down_up_dist = (Y - y_down)**self.smoothing + (X - x_up)**self.smoothing
+        up_down_dist = (Y - y_up)**self.smoothing + (X - x_down)**self.smoothing
+        up_up_dist = (Y - y_up)**self.smoothing + (X - x_up)**self.smoothing
+
+        total_dist = down_down_dist + down_up_dist +  up_down_dist +  up_up_dist
+        
+        down_down_weight = (down_down_dist / total_dist).to(self.device)
+        down_up_weight = (down_up_dist / total_dist).to(self.device)
+        up_down_weight = (up_down_dist / total_dist).to(self.device)
+        up_up_weight = (up_up_dist / total_dist).to(self.device)
+
+        return (
+            mask * (
+                down_down_weight * data[...,y_down,x_down] +
+                down_up_weight * data[...,y_down,x_up] +
+                up_down_weight * data[...,y_up,x_down] +
+                up_up_weight * data[...,y_up,x_up]
+            ), x_down, y_down
+        )
 
 class Pipeline(torch.nn.Module):
     def __init__(self, type = 'train', logpolar = False, device = 'cpu', 
