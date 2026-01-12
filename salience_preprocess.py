@@ -15,10 +15,23 @@ import main_salience
     #create subdir for each person
     #save each transformed image in subdir w/ img#_proc#
 
+# Block for acceleration
+n_threads = 40
+
+os.environ["OMP_NUM_THREADS"] = str(n_threads)       # or 32, or whatever you think is reasonable
+os.environ["MKL_NUM_THREADS"] = str(n_threads)
+os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads)
+os.environ["NUMEXPR_NUM_THREADS"]  = str(n_threads)
+
+torch.set_num_threads(n_threads)
+torch.set_num_interop_threads(2)
+# Run `taskset -c 32-63 python salience_preprocess.py` for better managed CPU usage
+# --------------------------------
+
 num_identities = 32
 for faces_data in ['updated']:#, 'cnn']: # create LP dataset and CNN dataset
     for split in ['test', 'train', 'valid']: 
-        split_dir = Path(f'data/faces_cleaned/faces_cleaned/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
+        split_dir = Path(f'data/faces/faces/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
         save_dir = Path(f'processed_data/salience1/{faces_data}_faces/{num_identities}_identities/{split}')
         save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -31,9 +44,14 @@ for faces_data in ['updated']:#, 'cnn']: # create LP dataset and CNN dataset
         # Get directory for the current split
         for label_dir in split_dir.iterdir(): # folder of images for each person
             #Make subdir for each person in save_dir 
+            if label_dir.name == ".DS_Store" or label_dir.name == ".DS_Store":
+                continue
+
             Path(f'processed_data/salience1/{faces_data}_faces/{num_identities}_identities/{split}/{label_dir.name}').mkdir(parents=True, exist_ok=True)
             print('label_dir: ', label_dir)
             for img_path in label_dir.iterdir(): # image paths for each person
+                if img_path.name == ".DS_Store" or img_path.name == "_.DS_Store":
+                    continue
                 img_pil = Image.open(img_path).convert("RGB") # load image as PIL object
                 img_tensor = TF.to_tensor(img_pil).unsqueeze(0) # convert to torch.tensor of shape (C,H,W) -> unsqueeze to (1,C,H,W), since pipeline expects batched imgs
                 transformed_imgs = pipeline(img_tensor) # torch.tensor(B,N,C,H,W)
@@ -46,6 +64,6 @@ for faces_data in ['updated']:#, 'cnn']: # create LP dataset and CNN dataset
                     transformed_img_pil.save(file_path) #save PIL image
 
 # start LP test when done
-for i in range(5):
-    print(f"starting LP {i}...")
-    main_salience.main(lp=True, dataset_name="salience", faces_data="updated") 
+# for i in range(5):
+#     print(f"starting LP {i}...")
+#     main_salience.main(lp=True, dataset_name="salience", faces_data="updated") 

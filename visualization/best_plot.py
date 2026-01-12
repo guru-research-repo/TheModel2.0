@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 num_ident = 32 # number of identities trained on
 # num_fix = 64 # number of fixation poitns trained on 
-sal = 'LP' # LP or CNN
+sal = 'LP fixed Gabor' # LP or CNN
 title = 'Fixations' if sal == 'LP' else 'Crops' 
 
 # Ensure numeric types
@@ -25,9 +25,9 @@ width = 0.25
 x = np.arange(len(fixs))
 
 # Plot bars w/ std
-# ax.bar(x+0*width, train, label='Train', color='tab:blue', width=width, yerr=train_std)
+ax.bar(x+0*width, train, label='Train', color='tab:blue', width=width, yerr=train_std)
 ax.bar(x+1*width, valid, label='Upright', color='tab:orange', width=width, yerr=valid_std)
-# ax.bar(x+2*width, test, label='Inverted', color='tab:green', width=width, yerr=test_std)
+ax.bar(x+2*width, test, label='Inverted', color='tab:green', width=width, yerr=test_std)
 
 # Labels and legend
 ax.set_xlabel('Number of Fixation Points')
@@ -36,7 +36,7 @@ ax.set_title(f' {title} on {num_ident} Identities - {sal}')
 ax.set_xticks(x + width, fixs)
 ax.legend()
 ax.grid(True)
-ax.set_ylim(0.8, 1.0) 
+# ax.set_ylim(0.8, 1.0) 
 
 plt.savefig(f'{num_ident}_{sal}_faces_holdout.png')
 

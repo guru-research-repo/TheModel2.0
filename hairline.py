@@ -160,7 +160,7 @@ class SaliencePipeline(torch.nn.Module):
         size = (31,31)
         lambd = [4.0, 8.0, 12.0]
         sigma = [0.56*l for l in lambd]
-        psi = [0.0, np.pi/2] # without both it has 2 lines, more wavy
+        psi = [0, np.pi / 2] # without both it has 2 lines, more wavy
         theta = [0.0, np.pi / 4, 2 * np.pi / 4, 3 * np.pi / 4,
                  np.pi, 5 * np.pi / 4, 6 * np.pi / 4, 7 * np.pi / 4]
         gamma = 0.5
@@ -200,7 +200,7 @@ class SaliencePipeline(torch.nn.Module):
         y = torch.arange(0, h, dtype=torch.float32)
         y_grid, x_grid = torch.meshgrid(y, x, indexing='ij')
 
-                # -----------------------------------------------------
+        # -----------------------------------------------------
         # Hyperparameters towards Gaussian Filter
         # -----------------------------------------------------
         alpha = 2    # sharpness edge drop
@@ -211,33 +211,22 @@ class SaliencePipeline(torch.nn.Module):
         ) ** alpha
 
         weighted_img = (gaussian_mask * img).to(self.device)
-        # weighted_img = (weighted_img - weighted_img.min()) / (weighted_img.max() - weighted_img.min())
-        # out_img = TF.to_pil_image(weighted_img)
-        # filename = f"out/img_proc_weighted.png"
-        # out_img.save(filename)
         
         filtered = self.kernels(weighted_img.unsqueeze(0))
         filtered = (filtered - torch.mean(filtered, dim=(1,2), keepdim=True)) / (torch.std(filtered, dim=(1,2), keepdim=True)+1e-9)
 
-        # gabor filters
-        # for i in range(self.num_kernels):
-        #     f = (cv2.filter2D(np.array(weighted_img), cv2.CV_32F, self.kernels[i]))
-        #     f = (f - np.mean(f)) / np.std(f)
-        #     filtered.append(f)
-            # out_img = TF.to_pil_image(filtered[i].astype(np.uint8))
-            # filename = f"out/img_proc_filtered-{i}.png"
-            # out_img.save(filename)
-
-        # seems to do worse
-        # mag = []
-        # for i in range(self.num_kernels//2):
-        #     mag.append(np.sqrt(filtered[i]**2 + filtered[i+self.num_kernels//2]**2))
-
         # calculate variance
+        # variance = torch.var(filtered, dim=0)**2
         variance = torch.var(filtered, dim=0)
         # variance = (variance - variance.min()) / (variance.max() - variance.min())
+        # T = 1600
+        # variance = torch.softmax((variance / T).reshape(-1), dim=0).view_as(variance)
+        # variance = torch.var(filtered, dim=0)**2
+        # eps = 1e-8
+        # variance = (variance - variance.mean()) / (variance.std() + eps)
         T = 4
         variance = torch.softmax((variance / T).flatten(), dim=0).view_as(variance)
+        # variance = torch.softmax(variance / T, dim=0).view_as(variance)
 
         weights = variance.flatten(start_dim=-2, end_dim=-1)
         features = torch.multinomial(weights, self.num_salient_points)
@@ -277,31 +266,66 @@ class SaliencePipeline(torch.nn.Module):
     
 
 if __name__ == "__main__":
-    id = 332
-    img_path = f'data/faces_cleaned/faces_cleaned/4_identities/test/EmmanuelMacron/{id}.jpg' # image or directory of images
+    img_paths = [
+                  f"data/faces/faces/32_identities/train/AdamRippon/3.jpg",
+                  f"data/faces/faces/32_identities/train/BarackObama/8.jpg",
+                  f"data/faces/faces/32_identities/train/EmmanuelMacron/101.jpg",
+                  f"data/faces/faces/32_identities/train/GalGadot/8.jpg",
+                  f"data/faces/faces/32_identities/train/EdSheeran/63.jpg",
+                  f"data/faces/faces/32_identities/train/JohnLegend/18.jpg",
+                  f"data/faces/faces/32_identities/train/KevinDurant/30.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/6.jpg",
+                  f"data/faces/faces/32_identities/train/PrinceHarry/104.jpg",
+                  f"data/faces/faces/32_identities/train/RyanReynolds/23.jpg"
+                  ]
     
-    img_path = Path(img_path).expanduser()
+    img_paths_ = [
+                  f"data/faces/faces/32_identities/train/LiuWen/5.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/6.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/7.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/17.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/23.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/24.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/27.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/31.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/46.jpg",
+                  f"data/faces/faces/32_identities/train/LiuWen/60.jpg",
+                  ]
 
-    if os.path.exists(img_path):
-        if os.path.isfile(img_path):
-            try:
-                image = Image.open(img_path).convert("RGB")
-            except Exception:
-                print('error')
-                exit(0)
+    image_paths = [Path(p).expanduser() for p in img_paths]
 
-            tensor_img = TF.to_tensor(image)
-            tensor_img = (tensor_img.permute(1,2,0).numpy() * 255).astype(np.uint8) 
-            points = SaliencePipeline('train', num_salient_points=64).sample_salience_points(tensor_img)
-            
-            img = mpimg.imread(img_path)
-            fig, ax = plt.subplots()
+    # Reuse the same pipeline object for all images
+    salience_pipeline = SaliencePipeline('train', num_salient_points=64)
 
-            # Display the image on the axes
-            ax.imshow(image)
+    # Create a 2x5 grid of subplots (10 total)
+    fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+    axes = axes.flatten()  # make it 1D for easy indexing
 
-            # Plot the points on the image
-            # 'o' specifies a circular marker, 'r' sets the color to red
-            # You can customize marker style, color, size, etc.
-            ax.plot(points[:,0], points[:,1], 'o', color='red', markersize=4)
-            plt.savefig(f'./out/img_proc_points_{id}.png')
+    for idx, img_path in enumerate(image_paths):
+        ax = axes[idx]
+
+        # Open image
+        image = Image.open(img_path).convert("RGB")
+
+        # Convert to numpy uint8 [H, W, C] for your salience function
+        tensor_img = TF.to_tensor(image)              # [C, H, W], float32 in [0, 1]
+        tensor_img = (tensor_img.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+
+        # Sample points
+        points = salience_pipeline.sample_salience_points(tensor_img)
+
+        # Show image and points on this subplot
+        ax.imshow(image)
+        ax.plot(points[:, 0], points[:, 1], 'o', color='red', markersize=3)
+        ax.set_title(img_path.parent.name, fontsize=8)  # e.g., EmmanuelMacron
+        ax.axis("off")
+
+    # If there were fewer than 10 images, we'd turn extra axes off, but you have exactly 10.
+
+    plt.tight_layout()
+    # Save one combined canvas
+    out_path = Path("./output/img_proc_points_grid.png")
+    print("successful")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)

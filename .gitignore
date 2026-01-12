@@ -1,5 +1,7 @@
 data
 processed_data
+processed_data_experiment
+processed_data_ori
 __pycache__
 output
 visualization/old
