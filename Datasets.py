@@ -21,8 +21,8 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4, lp = T
     return ds
 
 # Used only for salience training
-def make_datasets(ident, num_salient_points, lp = True):
-    root = "processed_data/salience/updated_faces" if lp else "processed_data/salience/cnn_faces"
+def make_datasets(ident, num_salient_points, lp = True, dataset="salience"):
+    root = f"processed_data/{dataset}/updated_faces" if lp else f"processed_data/{dataset}/cnn_faces"
 
     return {
         "train": SalienceDatasetBatched(

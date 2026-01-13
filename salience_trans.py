@@ -158,8 +158,8 @@ class SaliencePipeline(torch.nn.Module):
     def get_kernels(self):
         kernels = []
         size = (31,31)
-        lambd = [5.0,11.0]
-        sigma = [0.56*l for l in lambd]
+        lambd = [4.0,8.0]
+        sigma = [0.5*l for l in lambd]
         psi = [0.0, np.pi/2] # without both it has 2 lines, more wavy
         theta = [0.0,np.pi/4,2*np.pi/4,3*np.pi/4]#4*np.pi/4,5*np.pi/4,6*np.pi/4,7*np.pi/4] #could probably remove second half
         gamma = 0.5
@@ -213,10 +213,10 @@ class SaliencePipeline(torch.nn.Module):
         filtered[...,-10:,:] = 0
         filtered[...,:,:10] = 0
         filtered[...,:,-10:] = 0
+
         # mag=sqrt(real**2, imaginary**2)
-        # todo: test if using this is better
-        # num_pairs = filtered.shape[1] // 2
-        # filtered = torch.sqrt(filtered[:, :num_pairs]**2 + filtered[:,num_pairs:]**2 + 1e-9)
+        num_pairs = filtered.shape[1] // 2
+        filtered = torch.sqrt(filtered[:, :num_pairs]**2 + filtered[:,num_pairs:]**2 + 1e-9)
 
         # normalize
         fmean = torch.mean(filtered, dim=(2,3), keepdim=True)
@@ -224,7 +224,7 @@ class SaliencePipeline(torch.nn.Module):
         filtered = (filtered - fmean) / (fstd + 1e-9)
 
         # calculate variance
-        variance = torch.var(filtered, dim=1)**2
+        variance = torch.var(filtered, dim=1)
         # normalize per image
         vmin = variance.amin(dim=(1,2), keepdim=True)
         vmax = variance.amax(dim=(1,2), keepdim=True)
@@ -244,6 +244,7 @@ class SaliencePipeline(torch.nn.Module):
             y_actual = yMap[ys,xs] + 22
             x_actual = xMap[ys,xs] + 22
             coords[b] = torch.stack([x_actual, y_actual], dim=-1)  # [num_points, 2]
+            # coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
         return coords # [B, num_points, 2]
     
     def forward(self, img): 

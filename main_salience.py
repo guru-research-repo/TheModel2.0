@@ -64,7 +64,7 @@ def main(lp = True, dataset_name: str = "salience"):
             num_salient_points = s
 
             # 2) re-create loaders for this identity
-            datasets = make_datasets(ident, num_salient_points, lp)
+            datasets = make_datasets(ident, num_salient_points, lp, dataset=dataset_name)
 
             train_loader = DataLoader(
                 datasets["train"],
@@ -204,10 +204,10 @@ def main(lp = True, dataset_name: str = "salience"):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     df = pd.DataFrame(history)
-    df.to_csv(f"output/training_history_{'lp' if lp else 'cnn'}_{ts}.csv", index=False)
+    df.to_csv(f"output/training_history_{'lp' if lp else 'cnn'}_{dataset_name}_{ts}.csv", index=False)
 
     df = pd.DataFrame(history_acc)
-    df.to_csv(f"output/overall_training_history_{'lp' if lp else 'cnn'}_{ts}.csv", index=False)
+    df.to_csv(f"output/overall_training_history_{'lp' if lp else 'cnn'}_{dataset_name}_{ts}.csv", index=False)
 
     torch.save(model.state_dict(), f"output/resnet18_{'lp' if lp else 'cnn'}_{ts}.pth")
 

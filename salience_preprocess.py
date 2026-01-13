@@ -17,8 +17,8 @@ from Datasets import *
     #save each transformed image in subdir w/ img#_proc#
 
 num_identities = 32
-num_fixations = 16
-root = 'salience'
+num_fixations = 128
+root = 'salience128-48lp-mag'
 for split in ['test', 'train', 'valid']: 
     split_dir = Path(f'data/faces_cleaned/faces_cleaned/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
     updated_save_dir = Path(f'processed_data/{root}/updated_faces/{num_identities}_identities/{split}')
@@ -51,12 +51,12 @@ for split in ['test', 'train', 'valid']:
                 transformed_img_pil.save(file_path) #save PIL image
 
 # start LP test when done
-# for i in range(5):
-#     print(f"starting LP {i}...")
-#     main_salience.main(lp=True, dataset_name="salience") 
+for i in range(5):
+    print(f"starting LP {i}...")
+    main_salience.main(lp=True, dataset_name=root) 
 # for i in range(5):
 #     print(f"starting CNN {i}...")
-#     main_salience.main(lp=False, dataset_name="salience") 
+#     main_salience.main(lp=False, dataset_name=root) 
 
 
 # dataset_name = 'faces'
