@@ -17,7 +17,7 @@ def main(lp = True, dataset_name: str = "salience"):
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
     identity_counts = [32]
-    salient_counts  = [4, 8, 16]#, 32, 64]
+    salient_counts  = [4, 8, 16, 32]#, 64, 128]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = 40#epoch_block * len(salient_counts)
@@ -219,10 +219,10 @@ if __name__ == "__main__":
     
     # main(lp=True)
 
-    # for i in range(5):
-    #     print(f"starting LP {i}...")
-    #     main(lp=True, dataset_name="salience") 
-
     for i in range(5):
-        print(f"starting CNN {i}...")
-        main(lp=False, dataset_name="salience")
+        print(f"starting LP {i}...")
+        main(lp=True, dataset_name="salience128-48lp-mag") 
+
+    # for i in range(5):
+    #     print(f"starting CNN {i}...")
+    #     main(lp=False, dataset_name="salience")

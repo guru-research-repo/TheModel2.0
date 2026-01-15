@@ -151,6 +151,8 @@ class SaliencePipeline(torch.nn.Module):
         self.foveate = Foveate(crop_size=crop_size)
         self.logpolar = LogPolar(input_shape=(crop_size, crop_size),
                                 output_shape=output_shape, device=device)
+        self.gaborlogpolar = LogPolar(input_shape=(224,224),
+                                output_shape=(224,224), device=device)
 
         self.kernels = self.get_kernels().to(device)
 
@@ -196,11 +198,21 @@ class SaliencePipeline(torch.nn.Module):
         x = torch.arange(0, W, device=self.device)
         y = torch.arange(0, H, device=self.device)
         y_grid, x_grid = torch.meshgrid(y, x, indexing='ij')
-        gaussian_mask = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * (W/6)**2))
+        
+        # -----------------------------------------------------
+        # Hyperparameters towards Gaussian Filter
+        # -----------------------------------------------------
+        alpha = 2    # sharpness edge drop
+        sigma = W / 4  # range of attention
+
+        gaussian_mask = torch.exp(
+            -((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * sigma **2)
+        ) ** alpha
+
         gaussian_mask = gaussian_mask.repeat(B, 1, 1).unsqueeze(1)
         weighted_img = gaussian_mask * img
 
-        weighted_img, xMap, yMap = self.logpolar.forwardReturnMapping(T.CenterCrop((180,180))(weighted_img))
+        weighted_img, xMap, yMap = self.gaborlogpolar.forwardReturnMapping(weighted_img)
         # out_img = TF.to_pil_image(weighted_img[0])
         # filename = f"out/img_proc_lp332.png"
         # out_img.save(filename)
@@ -219,17 +231,21 @@ class SaliencePipeline(torch.nn.Module):
         filtered = torch.sqrt(filtered[:, :num_pairs]**2 + filtered[:,num_pairs:]**2 + 1e-9)
 
         # normalize
-        fmean = torch.mean(filtered, dim=(2,3), keepdim=True)
-        fstd = torch.std(filtered, dim=(2,3), keepdim=True)
-        filtered = (filtered - fmean) / (fstd + 1e-9)
+        # fmean = torch.mean(filtered, dim=(2,3), keepdim=True)
+        # fstd = torch.std(filtered, dim=(2,3), keepdim=True)
+        # filtered = (filtered - fmean) / (fstd + 1e-9)
 
         # calculate variance
         variance = torch.var(filtered, dim=1)
+        # fmean = torch.mean(variance, dim=(1,2), keepdim=True)
+        # fstd = torch.std(variance, dim=(1,2), keepdim=True)
+        # variance = (variance - fmean) / (fstd + 1e-9)
         # normalize per image
-        vmin = variance.amin(dim=(1,2), keepdim=True)
-        vmax = variance.amax(dim=(1,2), keepdim=True)
-        variance = (variance - vmin) / (vmax - vmin + 1e-9)
-        # out_img = TF.to_pil_image(variance[0])
+        # variance_out = (variance - variance.min()) / (variance.max() - variance.min())
+        # taking softmax out for now
+        # temp = 3
+        # variance = torch.softmax((variance / temp).flatten(-2,-1), dim=-1).view_as(variance)
+        # out_img = TF.to_pil_image(variance_out[0])
         # filename = f"out/img_proc_variance332.png"
         # out_img.save(filename)
 
@@ -241,8 +257,8 @@ class SaliencePipeline(torch.nn.Module):
             idx = torch.multinomial(flat, self.num_salient_points, replacement=False)
             ys = idx // W
             xs = idx % W
-            y_actual = yMap[ys,xs] + 22
-            x_actual = xMap[ys,xs] + 22
+            y_actual = yMap[ys,xs] #+ 22
+            x_actual = xMap[ys,xs] #+ 22
             coords[b] = torch.stack([x_actual, y_actual], dim=-1)  # [num_points, 2]
             # coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
         return coords # [B, num_points, 2]
