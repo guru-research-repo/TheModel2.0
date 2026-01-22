@@ -287,10 +287,10 @@ class SaliencePipeline(torch.nn.Module):
         
         transformed_imgs = transformed_imgs.flatten(0,1) # output shape is (B*N,...), represented as B B B B
         transformed_imgs = self.rotate(transformed_imgs)
-        transformed_imgs_cnn = transformed_imgs.clone()
 
 
         transformed_imgs = self.foveate(transformed_imgs)
+        transformed_imgs_cnn = transformed_imgs.clone()
         transformed_imgs = self.logpolar(transformed_imgs)
 
         transformed_imgs = transformed_imgs.unflatten(0, (B, self.num_salient_points))
