@@ -163,7 +163,8 @@ class SaliencePipeline(torch.nn.Module):
         lambd = [4.0,8.0]
         sigma = [0.5*l for l in lambd]
         psi = [0.0, np.pi/2] # without both it has 2 lines, more wavy
-        theta = [0.0,np.pi/4,2*np.pi/4,3*np.pi/4]#4*np.pi/4,5*np.pi/4,6*np.pi/4,7*np.pi/4] #could probably remove second half
+        # theta = [0.0, 1*np.pi/8, 2*np.pi/8, 3*np.pi/8, 4*np.pi/8, 5*np.pi/8, 6*np.pi/8, 7*np.pi/8]
+        theta = [0.0, 1*np.pi/4, 2*np.pi/4, 3*np.pi/4]
         gamma = 0.5
 
         for p in range(len(psi)):
@@ -216,6 +217,10 @@ class SaliencePipeline(torch.nn.Module):
         # out_img = TF.to_pil_image(weighted_img[0])
         # filename = f"out/img_proc_lp332.png"
         # out_img.save(filename)
+        # normalize
+        fmean = torch.mean(weighted_img, dim=(2,3), keepdim=True)
+        fstd = torch.std(weighted_img, dim=(2,3), keepdim=True)
+        weighted_img = (weighted_img - fmean) / (fstd + 1e-9)
         # apply gabor filters
         with torch.no_grad():
             filtered = self.kernels(weighted_img)

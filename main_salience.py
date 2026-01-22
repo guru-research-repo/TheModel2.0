@@ -17,7 +17,7 @@ def main(lp = True, dataset_name: str = "salience"):
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
     identity_counts = [32]
-    salient_counts  = [4, 8, 16, 32]#, 64, 128]
+    salient_counts  = [4, 8, 16, 32, 64]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = 40#epoch_block * len(salient_counts)
