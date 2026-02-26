@@ -52,7 +52,7 @@ def main(lp = True, dataset_name: str = "salience"):
         model = Model(size=180) if lp else Model(size=180)
         model = model.to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.001)
         criterion = torch.nn.CrossEntropyLoss()
 
         valid_batch_size = batch_size // s
@@ -120,6 +120,7 @@ def main(lp = True, dataset_name: str = "salience"):
         
                 optimizer.zero_grad()
                 outputs = model(inputs) # (B, output_dim)
+                # print(label_ids)
 
                 loss = criterion(outputs, label_ids)
                 loss.backward()
@@ -133,7 +134,7 @@ def main(lp = True, dataset_name: str = "salience"):
                 # t1 = time.perf_counter()
 
                 pbar.update(inputs.size(0))
-                pbar.set_postfix(acc=f"{batch_acc*100:.2f}%")
+                pbar.set_postfix(acc=f"{batch_acc*100:.2f}%", loss=loss.item())
                 # print(
                     # f"load→gpu: {t0 - t2:.3f}s | "
                     # f"infer: {t1 - t0:.3f}s | "
@@ -165,10 +166,10 @@ def main(lp = True, dataset_name: str = "salience"):
                     B,n,C,H,W = inputs.shape 
                     inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
                     outputs = model(inputs) #(B*num_salience_pts, output_dim)
-                    outputs = torch.softmax(outputs, dim=-1)
+                    # outputs = torch.softmax(outputs, dim=-1)
                     # print(outputs.shape)
                     outputs = outputs.reshape(B, num_salient_points, -1)
-                    outputs = outputs.mean(dim=1)
+                    outputs = outputs.sum(dim=1)
                     # print(outputs.shape)
                     preds = outputs.argmax(dim=1)
                     # print(preds)
