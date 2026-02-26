@@ -5,6 +5,8 @@ import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 from Datasets import SalienceDatasetBatched, SalienceDataset
 
+# Easily save preprocessed images that were created with salience_preprocess_fast.py
+
 # ---- Create dataset ----
 dataset = SalienceDatasetBatched(
     root_dir="processed_data/dogs1k/updated_objects",
