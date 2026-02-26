@@ -8,7 +8,7 @@ from tqdm import tqdm
 from Datasets import *
 from trans import Pipeline
 from salience_trans import SaliencePipeline
-
+import time
 
 def main(lp = True, dataset_name: str = "salience"):
     os.makedirs("output", exist_ok=True)
@@ -16,11 +16,11 @@ def main(lp = True, dataset_name: str = "salience"):
     # Configuration
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
-    identity_counts = [32]
-    salient_counts  = [4, 8, 16, 32, 64]
+    identity_counts = [4]#, 8, 16, 32, 64, 128]
+    salient_counts  = [16]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
-    total_epochs    = 40#epoch_block * len(salient_counts)
+    total_epochs    = epoch_block * len(identity_counts)
     num_gpu         = 1
     num_workers     = 16
     idx_gpu         = 5   # The index of GPU that this task is about to run on
@@ -97,19 +97,30 @@ def main(lp = True, dataset_name: str = "salience"):
             pbar = tqdm(total=len(train_loader.dataset),
                         desc=f"Epoch {epoch}/{total_epochs}",
                         unit="img")
+            # t2 = time.perf_counter()
 
             for inputs, labels in train_loader:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
+                # t0 = time.perf_counter()
+
 
                 # if labels are one‑hot (B, C), convert to class indices (B,)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+                # print(label_ids)
+                # out_img = TF.to_pil_image(inputs[0])
+                # filename = f"out/train_img.png"
+                # out_img.save(filename)
+                # out_img = TF.to_pil_image(inputs[1])
+                # filename = f"out/train_img1.png"
+                # out_img.save(filename)
+                # return
 
                 B,C,H,W = inputs.shape
         
                 optimizer.zero_grad()
                 outputs = model(inputs) # (B, output_dim)
-                
+
                 loss = criterion(outputs, label_ids)
                 loss.backward()
                 optimizer.step()
@@ -119,9 +130,15 @@ def main(lp = True, dataset_name: str = "salience"):
                 total   += label_ids.size(0)
                 batch_acc = correct / total
                 train_accs.append(batch_acc)
+                # t1 = time.perf_counter()
 
                 pbar.update(inputs.size(0))
                 pbar.set_postfix(acc=f"{batch_acc*100:.2f}%")
+                # print(
+                    # f"load→gpu: {t0 - t2:.3f}s | "
+                    # f"infer: {t1 - t0:.3f}s | "
+                # )
+                # t2 = time.perf_counter()
 
             pbar.close()
             epoch_acc = correct / total
@@ -133,23 +150,40 @@ def main(lp = True, dataset_name: str = "salience"):
             model.eval()
             correct = total = 0
             valid_accs = []
-
+            # t0 = time.perf_counter()
+            vpbar = tqdm(total=len(valid_loader.dataset),
+                        desc=f"Holdout Epoch {epoch}/{total_epochs}",
+                        unit="img")
             with torch.no_grad():
                 for inputs, labels in valid_loader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                    
+                    # t1 = time.perf_counter()
+                    # print(label_ids.shape)
+
                     # transform input data
                     B,n,C,H,W = inputs.shape 
                     inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
                     outputs = model(inputs) #(B*num_salience_pts, output_dim)
-
+                    outputs = torch.softmax(outputs, dim=-1)
+                    # print(outputs.shape)
                     outputs = outputs.reshape(B, num_salient_points, -1)
-                    outputs = outputs.sum(dim=1)
-                    
+                    outputs = outputs.mean(dim=1)
+                    # print(outputs.shape)
                     preds = outputs.argmax(dim=1)
+                    # print(preds)
+                    # return
                     batch_acc = (preds == label_ids).float().mean().item()
                     valid_accs.append(batch_acc)
+                    # t2 = time.perf_counter()
+                    # print(
+                        # f"load→gpu: {t1 - t0:.3f}s | "
+                        # f"infer: {t2 - t1:.3f}s | "
+                    # )
+                    # t0 = time.perf_counter()
+                    vpbar.update(B)
+                
+            vpbar.close()
 
             valid_mean = np.mean(valid_accs)
             valid_std  = np.std(valid_accs)
@@ -158,11 +192,14 @@ def main(lp = True, dataset_name: str = "salience"):
             # 5) ----- TEST -----
             correct = total = 0
             test_accs = []
+            tpbar = tqdm(total=len(test_loader.dataset),
+                        desc=f"Inverted Epoch {epoch}/{total_epochs}",
+                        unit="img")
             with torch.no_grad():
                 for inputs, labels in test_loader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                    
+
                     # transform input data
                     B,n,C,H,W = inputs.shape 
                     inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
@@ -173,7 +210,9 @@ def main(lp = True, dataset_name: str = "salience"):
                     preds = outputs.argmax(dim=1)
                     batch_acc = (preds == label_ids).float().mean().item()
                     test_accs.append(batch_acc)
-
+                    tpbar.update(B)
+                
+            tpbar.close()
             test_mean = np.mean(test_accs)
             test_std  = np.std(test_accs)
             print(f"    Test  Acc = {test_mean*100:.2f}% ± {test_std*100:.2f}%\n")
@@ -221,8 +260,8 @@ if __name__ == "__main__":
 
     for i in range(5):
         print(f"starting LP {i}...")
-        main(lp=True, dataset_name="salience128-48lp-mag") 
+        main(lp=False, dataset_name="dogs1k") 
 
     # for i in range(5):
     #     print(f"starting CNN {i}...")
-    #     main(lp=False, dataset_name="salience")
+    #     main(lp=False, dataset_name="salience128-crops")

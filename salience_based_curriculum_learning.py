@@ -5,18 +5,18 @@ import pandas as pd
 import datetime
 import torch
 import torch.nn.functional as F
-from utils_new import *
+from utils import *
 from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from Datasets_new import *
+from Datasets import *
 
 def main(lp=True, dataset_name="salience"):
     os.makedirs("FACES_LPNet_32_fixations_40_epochblock_Martha", exist_ok=True)
 
     # ---------------------------- Curriculum Setup -----------------------------
     identity_counts = [4, 8, 16, 32, 64, 128]    # identities introduced gradually
-    salient_counts  = [32]               # always use first 32 fixations
+    salient_counts  = [16]               # always use first 32 fixations
     epoch_block     = 40              # each stage length of 40 epoch block
     total_epochs    = epoch_block * len(identity_counts)  # 240
     num_workers     = 4
@@ -248,4 +248,4 @@ if __name__ == "__main__":
 
     for i in range(5):
         print(f"starting LP run...")
-        main(lp=True, dataset_name="salience")
+        main(lp=True, dataset_name="dogs1k")

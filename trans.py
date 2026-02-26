@@ -338,8 +338,8 @@ class LogPolar(torch.nn.Module):
                 )
             )
 
-        y_down, x_down = Y.long().clamp(0, data.shape[-2] - 1), X.long().clamp(0, data.shape[-1] - 1)
-        y_up, x_up = (y_down+1).clamp(0, data.shape[-2] - 1), (x_down+1).clamp(0, data.shape[-1] - 1)
+        y_down, x_down = Y.long().clamp(0, data.shape[-2] - 1).to(self.device), X.long().clamp(0, data.shape[-1] - 1).to(self.device)
+        y_up, x_up = (y_down+1).clamp(0, data.shape[-2] - 1).to(self.device), (x_down+1).clamp(0, data.shape[-1] - 1).to(self.device)
         
         down_down_dist = (Y - y_down)**self.smoothing + (X - x_down)**self.smoothing
         down_up_dist = (Y - y_down)**self.smoothing + (X - x_up)**self.smoothing

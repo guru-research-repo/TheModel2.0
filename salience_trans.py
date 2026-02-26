@@ -213,7 +213,7 @@ class SaliencePipeline(torch.nn.Module):
         gaussian_mask = gaussian_mask.repeat(B, 1, 1).unsqueeze(1)
         weighted_img = gaussian_mask * img
 
-        weighted_img, xMap, yMap = self.gaborlogpolar.forwardReturnMapping(weighted_img)
+        # weighted_img, xMap, yMap = self.gaborlogpolar.forwardReturnMapping(weighted_img)
         # out_img = TF.to_pil_image(weighted_img[0])
         # filename = f"out/img_proc_lp332.png"
         # out_img.save(filename)
@@ -226,10 +226,10 @@ class SaliencePipeline(torch.nn.Module):
             filtered = self.kernels(weighted_img)
         _, _, _, W = filtered.shape
         # mask out boundaries
-        filtered[...,:10,:] = 0
-        filtered[...,-10:,:] = 0
-        filtered[...,:,:10] = 0
-        filtered[...,:,-10:] = 0
+        # filtered[...,:10,:] = -10
+        # filtered[...,-10:,:] = -10
+        # filtered[...,:,:10] = -10
+        # filtered[...,:,-10:] = -10
 
         # mag=sqrt(real**2, imaginary**2)
         num_pairs = filtered.shape[1] // 2
@@ -262,10 +262,10 @@ class SaliencePipeline(torch.nn.Module):
             idx = torch.multinomial(flat, self.num_salient_points, replacement=False)
             ys = idx // W
             xs = idx % W
-            y_actual = yMap[ys,xs] #+ 22
-            x_actual = xMap[ys,xs] #+ 22
-            coords[b] = torch.stack([x_actual, y_actual], dim=-1)  # [num_points, 2]
-            # coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
+            # y_actual = yMap[ys,xs] #+ 22
+            # x_actual = xMap[ys,xs] #+ 22
+            # coords[b] = torch.stack([x_actual, y_actual], dim=-1)  # [num_points, 2]
+            coords[b] = torch.stack([xs, ys], dim=-1)  # [num_points, 2]
         return coords # [B, num_points, 2]
     
     def forward(self, img): 
@@ -286,12 +286,23 @@ class SaliencePipeline(torch.nn.Module):
                                               height=self.crop_size, width=self.crop_size)
         
         transformed_imgs = transformed_imgs.flatten(0,1) # output shape is (B*N,...), represented as B B B B
+        # out_img = TF.to_pil_image(transformed_imgs[0])
+        # filename = f"out/{self.type}_crop.png"
+        # out_img.save(filename)
         transformed_imgs = self.rotate(transformed_imgs)
-
+        # out_img = TF.to_pil_image(transformed_imgs[0])
+        # filename = f"out/{self.type}_rotate.png"
+        # out_img.save(filename)
 
         transformed_imgs = self.foveate(transformed_imgs)
+        # out_img = TF.to_pil_image(transformed_imgs[0])
+        # filename = f"out/{self.type}_foveate.png"
+        # out_img.save(filename)
         transformed_imgs_cnn = transformed_imgs.clone()
         transformed_imgs = self.logpolar(transformed_imgs)
+        # out_img = TF.to_pil_image(transformed_imgs[0])
+        # filename = f"out/{self.type}_lp.png"
+        # out_img.save(filename)
 
         transformed_imgs = transformed_imgs.unflatten(0, (B, self.num_salient_points))
         transformed_imgs_cnn = transformed_imgs_cnn.unflatten(0, (B, self.num_salient_points))
@@ -325,3 +336,6 @@ if __name__ == "__main__":
             # 'o' specifies a circular marker, 'r' sets the color to red
             ax.plot(points[0,:,0], points[0,:,1], 'o', color='red', markersize=4)
             plt.savefig(f'./out/img_proc_points_{id}.png')
+
+            # SaliencePipeline('train', num_salient_points=32).forward(tensor_img)
+            # SaliencePipeline('test', num_salient_points=32).forward(tensor_img)
