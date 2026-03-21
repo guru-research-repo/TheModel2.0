@@ -39,7 +39,8 @@ class FaceDataset(Dataset):
             if not label_dir.is_dir():
                 continue
             for img_path in label_dir.iterdir():
-                self.samples.append((label_dir.name, img_path))
+                if img_path.suffix in ['.jpg', '.png']: 
+                    self.samples.append((label_dir.name, img_path))
 
     def __len__(self):
         return len(self.samples)
@@ -59,10 +60,10 @@ class FaceDataset(Dataset):
 num_identities = 128
 num_fixations = 16
 batch_size = 128
-root = 'dogs'
-dataset_name='dogs'
+root = 'face' # dest
+dataset_name='faces' # source
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-for split in ['test', 'train']: 
+for split in ['test', 'valid', 'train']: 
     split_dir = Path(f'data/{dataset_name}/{dataset_name}/{num_identities}_identities/{split}') # directory w/ subdirectories (AdamRippon,Alicia,...) with images num.jpg 
     if split == 'test':
         split_dir = Path(f'data/{dataset_name}/{dataset_name}/{num_identities}_identities/valid')
@@ -109,8 +110,8 @@ for split in ['test', 'train']:
                 Path(f'processed_data/{root}/cnn_objects/{split}/{label}').mkdir(parents=True, exist_ok=True)
         
                 torch.save({
-                    'lp': (transformed_imgs_lp[b].clamp(0,1)*255).round().to(torch.uint8).cpu(),
-                    'cnn': (transformed_imgs_cnn[b].clamp(0,1)*255).round().to(torch.uint8).cpu()
+                    'lp': (transformed_imgs_lp[b].clamp(0,1)).cpu(),
+                    'cnn': (transformed_imgs_cnn[b].clamp(0,1)).cpu()
                     },
                     f'processed_data/{root}/updated_objects/{split}/{label}/{stem}_proc.pt')
                 

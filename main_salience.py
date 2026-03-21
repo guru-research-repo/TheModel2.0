@@ -16,7 +16,7 @@ def main(lp = True, dataset_name: str = "salience"):
     # Configuration
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
-    identity_counts = [4]#, 8, 16, 32, 64, 128]
+    identity_counts = [4, 8, 16, 32, 64, 128]
     salient_counts  = [16]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
@@ -52,7 +52,7 @@ def main(lp = True, dataset_name: str = "salience"):
         model = Model(size=180) if lp else Model(size=180)
         model = model.to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = torch.nn.CrossEntropyLoss()
 
         valid_batch_size = batch_size // s
@@ -261,7 +261,7 @@ if __name__ == "__main__":
 
     for i in range(5):
         print(f"starting LP {i}...")
-        main(lp=False, dataset_name="dogs1k") 
+        main(lp=True, dataset_name="dogs1k") 
 
     # for i in range(5):
     #     print(f"starting CNN {i}...")
