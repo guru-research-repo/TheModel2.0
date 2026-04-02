@@ -23,29 +23,29 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4, lp = T
     return ds
 
 # Used only for salience training
-def make_datasets(ident, num_salient_points, lp = True, dataset="salience"):
-    root = f"processed_data/{dataset}/updated_faces/128_identities" if lp else f"processed_data/{dataset}/cnn_faces/128_identities"
+# def make_datasets(ident, num_salient_points, lp = True, dataset="salience"):
+#     root = f"processed_data/{dataset}/updated_faces/128_identities" if lp else f"processed_data/{dataset}/cnn_faces/128_identities"
 
-    return {
-        "train": SalienceDatasetBatched(
-            root_dir=root,
-            num_identities=ident,
-            split="train",
-            num_salient_points=num_salient_points
-        ),
-        "valid": SalienceDataset(
-            root_dir=root,
-            num_identities=ident,
-            split="valid",
-            num_salient_points=num_salient_points
-        ),
-        "test": SalienceDataset(
-            root_dir=root,
-            num_identities=ident,
-            split="test",
-            num_salient_points=num_salient_points
-        ),
-    }
+#     return {
+#         "train": SalienceDatasetBatched(
+#             root_dir=root,
+#             num_identities=ident,
+#             split="train",
+#             num_salient_points=num_salient_points
+#         ),
+#         "valid": SalienceDataset(
+#             root_dir=root,
+#             num_identities=ident,
+#             split="valid",
+#             num_salient_points=num_salient_points
+#         ),
+#         "test": SalienceDataset(
+#             root_dir=root,
+#             num_identities=ident,
+#             split="test",
+#             num_salient_points=num_salient_points
+#         ),
+#     }
 
 class CelebAFaceIDDataset(Dataset):
     def __init__(self, root_dir: str = "data", split: str = "train"):
@@ -291,7 +291,6 @@ class SalienceDataset(Dataset):
 
         label = label_to_one_hot(label, self.map)
         return imgs, label
-    
 
 """
 Rather than returning all fixations in the same image at once, 
@@ -341,7 +340,6 @@ class SalienceDatasetBatched(Dataset):
                     if fname.endswith(f'c{i}.png'): # "procX.png" or "procXX.png"
                         self.samples.append((os.path.join(ident_dir, fname), ident))
 
-
     def __len__(self):
         return len(self.samples)
 
@@ -350,35 +348,237 @@ class SalienceDatasetBatched(Dataset):
         img = TF.to_tensor(Image.open(path).convert("RGB"))
 
         label = label_to_one_hot(label, self.map)
-        return img, label
+        return img, label    
+
+class SalienceDatasetV3(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str, type: str, 
+        num_salient_points: int = 4):
+        """
+        Args:
+            root_dir (str): path to "/dataset"
+            num_identities (int): 4, 8, …, 128
+            split (str): one of "train", "valid", "test"
+            type (str): "faces" or "dogs"
+        """
+        self.num_salient_points = num_salient_points
+        self.proc_dir = os.path.join(root_dir, split)
+
+        split = 'valid' if split == 'test' else split
+
+        # build the path to e.g. "/dataset/faces/faces/8_identities/train"
+        self.data_dir = os.path.join(
+            'data', 
+            type, 
+            type, 
+            f"{num_identities}_identities", 
+            split
+        )
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+        # list all celebrity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        self.map = get_label_mapping(type=type)
+
+        # collect (image_path, label) tuples
+        self.samples = []
+        self.cache = {} # label -> loaded salience dict
+        for label in self.classes:
+            label_dir = Path(f'{self.data_dir}/{label}')
+            salience_path = Path(f'{self.proc_dir}/{label}/salience.pt')
+
+            data = torch.load(salience_path)
+            stems = data["stems"]
+            # print(stems)
+            stem_to_idx = {stem[0]: i for i, stem in enumerate(stems)}
+
+            # cache once
+            self.cache[label] = data['salience_points']
+
+            for img_path in label_dir.iterdir():
+                if img_path.suffix.lower() in ['.jpg', '.png', '.jpeg']:
+
+                    stem = img_path.stem
+                    if stem not in stem_to_idx:
+                        print(stem_to_idx.keys())
+                        print(img_path)
+                    img_idx = stem_to_idx[stem]
+
+                    # base_num = fname.split(".")[0]  # base image
+                    # here label is the celebrity name (string)
+                    self.samples.append((img_path, label, img_idx))
+
+        # print(self.samples[0])
+        
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, label, img_idx = self.samples[idx]
+        
+        # take first n processed variants
+        data = self.cache[label]
+        salience_points = data[img_idx,:self.num_salient_points]
+
+        imgs = TF.to_tensor(Image.open(img_path).convert("RGB")).unsqueeze(0).repeat(self.num_salient_points,1,1,1) # (n, C, H, W)
+
+        crop_size = 180
+        cropped = torch.empty((self.num_salient_points,3,crop_size,crop_size))
+
+        for i in range(self.num_salient_points):
+            center = salience_points[i]
+            cropped[i] = TF.crop(imgs[i],
+                                        top=center[1]-crop_size//2,
+                                        left=center[0]-crop_size//2, 
+                                        height=crop_size, width=crop_size)
+
+        label = label_to_one_hot(label, self.map)
+        return imgs, label, salience_points
+
+"""
+Rather than returning all fixations in the same image at once, 
+compile the dataset as normal, such that a random number are present in each mini-batch.
+"""
+class SalienceDatasetBatchedV3(Dataset):
+    def __init__(self, root_dir: str, num_identities: int, split: str, type: str, 
+        num_salient_points: int = 4):
+        """
+        Args:
+            root_dir (str): path to "/dataset"
+            num_identities (int): 4, 8, …, 128
+            split (str): one of "train", "valid", "test"
+            type (str): "faces" or "dogs"
+        """
+        self.num_salience_points = num_salient_points
+        self.proc_dir = os.path.join(root_dir, split)
+
+        split = 'valid' if split == 'test' else split
+        
+        # build the path to e.g. "/dataset/faces/faces/8_identities/train"
+        self.data_dir = os.path.join(
+            'data', 
+            type, 
+            type, 
+            f"{num_identities}_identities", 
+            split
+        )
+        if not os.path.isdir(self.data_dir):
+            raise ValueError(f"Directory not found: {self.data_dir}")
+
+
+        # list all celebrity folders
+        self.classes = sorted(
+            d for d in os.listdir(self.data_dir)
+            if os.path.isdir(os.path.join(self.data_dir, d))
+        )
+
+        self.map = get_label_mapping(type=type)
+
+        # collect (image_path, label) tuples
+        self.samples = []
+        self.cache = {} # label -> loaded salience dict
+        for label in self.classes:
+            label_dir = Path(f'{self.data_dir}/{label}')
+            # print('label dir', label_dir)
+            
+            salience_path = Path(f'{self.proc_dir}/{label}/salience.pt') # fix this path
+            # print('salience_path:', salience_path)
+
+            if not salience_path.exists():
+                continue
+
+            data = torch.load(salience_path)
+            stems = data["stems"]
+            # print(stems)
+            stem_to_idx = {stem[0]: i for i, stem in enumerate(stems)}
+
+            # cache once
+            self.cache[label] = data['salience_points']
+
+            for img_path in label_dir.iterdir():
+                if img_path.suffix.lower() not in ['.jpg', '.png', '.jpeg']:
+                    continue
+
+                stem = img_path.stem
+                # print(stem_to_idx.keys())
+                img_idx = stem_to_idx[stem]
+                if stem not in stem_to_idx:
+                    continue
+
+                # load each salience point
+                for sp_idx in range(self.num_salience_points):
+                    self.samples.append({
+                        "img_path": img_path,
+                        "label": label,
+                        "img_idx": img_idx,
+                        "sp_idx": sp_idx
+                    })
+
+        # print(self.samples[0])
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        label = sample['label']
+
+        # Load image
+        img = Image.open(sample["img_path"]).convert("RGB")
+        img_tensor = TF.to_tensor(img)
+
+        # Get one salience point
+        data = self.cache[label]
+        salience_point = data[ sample["img_idx"], sample["sp_idx"] ]  # (2,)
+        crop_size = 180
+        img_tensor = TF.crop(img_tensor,
+                                top=salience_point[1]-crop_size//2,
+                                left=salience_point[0]-crop_size//2, 
+                                height=crop_size, width=crop_size)
+
+
+        label = label_to_one_hot(label, self.map)
+
+        return {
+            "image": img_tensor,              # (C, H, W)
+            "salience": salience_point,       # (2,)
+            "label": label
+        }
     
 ### ------------------------------------------------------
-'''
 # Used only for salience training
 def make_datasets(ident, num_salient_points, lp = True, dataset="salience"):
     root = f"processed_data/{dataset}/updated_objects"
 
     return {
-        "train": SalienceDatasetBatched(
+        "train": SalienceDatasetBatchedV3(
             root_dir=root,
             num_identities=ident,
             split="train",
             num_salient_points=num_salient_points,
-            lp=lp
+            type='dogs1k'
+            # lp=lp
         ),
-        "valid": SalienceDataset(
+        "valid": SalienceDatasetV3(
             root_dir=root,
             num_identities=ident,
             split="valid",
             num_salient_points=num_salient_points,
-            lp=lp
+            type='dogs1k'
+            # lp=lp
         ),
-        "test": SalienceDataset(
+        "test": SalienceDatasetV3(
             root_dir=root,
             num_identities=ident,
             split="test",
             num_salient_points=num_salient_points,
-            lp=lp
+            type='dogs1k'
+            # lp=lp
         ),
     }
 
@@ -403,8 +603,8 @@ class SalienceDataset(Dataset):
 
         class_path = os.path.join(
             'data',
-            'faces',
-            'faces',
+            'dogs1k',
+            'dogs1k',
             f"{num_identities}_identities",
             split
         )
@@ -413,7 +613,7 @@ class SalienceDataset(Dataset):
             if os.path.isdir(os.path.join(class_path, d))
         )
 
-        self.map = get_label_mapping(type="faces")
+        self.map = get_label_mapping(type="dogs1k")
 
         # Collect base images and all their processed variants
         self.samples = []  # [(path, label), ...]
@@ -469,8 +669,8 @@ class SalienceDatasetBatched(Dataset):
         # list all identity folders
         class_path = os.path.join(
             'data',
-            'faces',
-            'faces',
+            'dogs1k',
+            'dogs1k',
             f"{num_identities}_identities",
             split
         )
@@ -479,7 +679,7 @@ class SalienceDatasetBatched(Dataset):
             if os.path.isdir(os.path.join(class_path, d))
         )
 
-        self.map = get_label_mapping(type="faces")
+        self.map = get_label_mapping(type="dogs1k")
 
         # Collect base images and all their processed variants
         self.samples = []  # [(path, label), ...]
@@ -518,4 +718,4 @@ class SalienceDatasetBatched(Dataset):
 
         label = label_to_one_hot(label, self.map)
         return img, label
-        '''
+        

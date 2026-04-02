@@ -399,7 +399,7 @@ class Pipeline(torch.nn.Module):
         self.tensorize = T.ToTensor()
         
         self.compose = T.Compose([
-            self.crop,
+            # self.crop,
             self.rotate,
             self.foveate,
             self.logpolar,

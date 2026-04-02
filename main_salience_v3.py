@@ -9,6 +9,7 @@ from Datasets import *
 from trans import Pipeline
 from salience_trans import SaliencePipeline
 import time
+from torch.amp import autocast, GradScaler
 
 def main(lp = True, dataset_name: str = "salience"):
     os.makedirs("output", exist_ok=True)
@@ -17,7 +18,7 @@ def main(lp = True, dataset_name: str = "salience"):
     # ------------------------------------------------------------------------
     dataset_name    = dataset_name
     identity_counts = [4, 8, 16, 32, 64, 128]
-    salient_counts  = [32]
+    salient_counts  = [16]
     splits          = ["train", "valid", "test"]
     epoch_block     = 40  # how many epochs per identity
     total_epochs    = epoch_block * len(identity_counts)
@@ -28,6 +29,8 @@ def main(lp = True, dataset_name: str = "salience"):
     lr              = 1e-3
     # device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
     device = torch.device(f"cuda:{0}" if torch.cuda.is_available() and torch.cuda.device_count() > 0 else "cpu")
+
+    scaler = GradScaler('cuda')
 
     print('Device: ', device)
 
@@ -41,6 +44,10 @@ def main(lp = True, dataset_name: str = "salience"):
     def salient_points_for_epoch(epoch: int) -> int:
         idx = (epoch - 1) // epoch_block
         return salient_counts[idx]
+    
+    trainPipeline = Pipeline('train', logpolar=lp, device=device, crop_size=180)
+    valPipeline = Pipeline(None, logpolar=lp, device=device, crop_size=180)
+    testPipeline = Pipeline('test', logpolar=lp, device=device, crop_size=180)
 
     # ------------------------------------------------------------------------
     # 2) Training loop
@@ -50,44 +57,50 @@ def main(lp = True, dataset_name: str = "salience"):
     for s in salient_counts:
         torch.cuda.empty_cache()
         model = Model(size=180) if lp else Model(size=180)
-        model = model.to(device)
+        model = torch.compile(model.to(device=device, memory_format=torch.channels_last))
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = torch.nn.CrossEntropyLoss()
 
         valid_batch_size = batch_size // s
 
+        # To know when to rebuild DataLoaders
+        prev_ident = None
 
         for epoch in range(1, total_epochs + 1):
             # 1) figure out which identity we're on & how many salient points to use
             ident = identity_for_epoch(epoch)
             num_salient_points = s
 
-            # 2) re-create loaders for this identity
-            datasets = make_datasets(ident, num_salient_points, lp, dataset=dataset_name)
+            if prev_ident != ident:
+                prev_ident = ident
+                print(f"\n=== Building datasets for ident={ident}, fix={num_salient_points} ===")
 
-            train_loader = DataLoader(
-                datasets["train"],
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=num_workers,
-                pin_memory=True
-            )
-            valid_loader = DataLoader(
-                datasets["valid"],
-                batch_size=valid_batch_size,
-                shuffle=False,
-                num_workers=num_workers,
-                pin_memory=True
-            )
-            test_loader  = DataLoader(
-                datasets["test"],
-                batch_size=valid_batch_size,
-                shuffle=False,
-                num_workers=num_workers,
-                pin_memory=True
-            )
+                # 2) re-create loaders for this identity
+                datasets = make_datasets(ident, num_salient_points, lp, dataset=dataset_name)
 
+                train_loader = DataLoader(
+                    datasets["train"],
+                    batch_size=batch_size,
+                    shuffle=True,
+                    num_workers=num_workers,
+                    pin_memory=True
+                )
+                valid_loader = DataLoader(
+                    datasets["valid"],
+                    batch_size=valid_batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                    pin_memory=True
+                )
+                # test_loader  = DataLoader(
+                #     datasets["test"],
+                #     batch_size=valid_batch_size,
+                #     shuffle=False,
+                #     num_workers=num_workers,
+                #     pin_memory=True
+                # )
+            
             # 3) ----- TRAIN -----
             model.train()
             correct = 0
@@ -97,13 +110,17 @@ def main(lp = True, dataset_name: str = "salience"):
             pbar = tqdm(total=len(train_loader.dataset),
                         desc=f"Epoch {epoch}/{total_epochs}",
                         unit="img")
-            # t2 = time.perf_counter()
+            t3 = time.perf_counter()
 
-            for inputs, labels in train_loader:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-                # t0 = time.perf_counter()
+            for batch in train_loader:
+                inputs = batch['image'].to(device=device)
+                # salience_points = batch['salience'].to(device)
+                labels = batch['label'].to(device)
 
+                # torch.cuda.synchronize()
+                t0 = time.perf_counter()
+                # process images
+                B,H,W,C = inputs.shape
 
                 # if labels are one‑hot (B, C), convert to class indices (B,)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
@@ -115,73 +132,97 @@ def main(lp = True, dataset_name: str = "salience"):
                 # filename = f"out/train_img1.png"
                 # out_img.save(filename)
                 # return
-
-                B,C,H,W = inputs.shape
+                # torch.cuda.synchronize()
+                t1 = time.perf_counter()
         
                 optimizer.zero_grad()
-                outputs = model(inputs) # (B, output_dim)
-                # print(label_ids)
+                with autocast('cuda'):
+                    inputs = trainPipeline(inputs).to(memory_format=torch.channels_last)
+                    outputs = model(inputs) # (B, output_dim)
 
-                loss = criterion(outputs, label_ids)
-                loss.backward()
-                optimizer.step()
+                    loss = criterion(outputs, label_ids)
+                # print(label_ids)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
 
                 preds = outputs.argmax(dim=1)
                 correct += (preds == label_ids).sum().item()
                 total   += label_ids.size(0)
                 batch_acc = correct / total
                 train_accs.append(batch_acc)
-                # t1 = time.perf_counter()
 
+                # torch.cuda.synchronize()
+                t2 = time.perf_counter()
                 pbar.update(inputs.size(0))
                 pbar.set_postfix(acc=f"{batch_acc*100:.2f}%", loss=loss.item())
                 # print(
-                    # f"load→gpu: {t0 - t2:.3f}s | "
-                    # f"infer: {t1 - t0:.3f}s | "
+                #     f"load→gpu: {t0 - t3:.3f}s | "
+                #     f"process: {t1 - t0:.3f}s | "
+                #     f"infer: {t2 - t1:.3f}s | "
                 # )
-                # t2 = time.perf_counter()
+                t3 = time.perf_counter()
 
             pbar.close()
             epoch_acc = correct / total
             print(f"→ Epoch {epoch}/{total_epochs} — Accuracy: {epoch_acc*100:.2f}%")
             train_mean = np.mean(train_accs)
             train_std  = np.std(train_accs)
-
+            
+            
             # 4) ----- VALIDATION -----
             model.eval()
             correct = total = 0
             valid_accs = []
-            # t0 = time.perf_counter()
+            test_accs = []
+            t3 = time.perf_counter()
             vpbar = tqdm(total=len(valid_loader.dataset),
                         desc=f"Holdout Epoch {epoch}/{total_epochs}",
                         unit="img")
-            with torch.no_grad():
-                for inputs, labels in valid_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
+            with torch.no_grad(), autocast('cuda'):
+                for inputs, labels, salience_points in valid_loader:
+                    inputs = inputs.to(device=device) 
+                    labels = labels.to(device)
+                    # salience_points = salience_points.to(device)
                     label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-                    # t1 = time.perf_counter()
-                    # print(label_ids.shape)
 
-                    # transform input data
-                    B,n,C,H,W = inputs.shape 
-                    inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
-                    outputs = model(inputs) #(B*num_salience_pts, output_dim)
+                    t0 = time.perf_counter()
+
+                    B,n,C,H,W = inputs.shape
+                    inputs = inputs.reshape(-1,C,H,W)
+                    
+                    valInputs = valPipeline(inputs).to(memory_format=torch.channels_last)
+                    testInputs = testPipeline(inputs).to(memory_format=torch.channels_last)
+
+                    # print(label_ids.shape)
+                    t1 = time.perf_counter()
+
+                    valOutputs = model(valInputs) #(B*num_salience_pts, output_dim)
                     # outputs = torch.softmax(outputs, dim=-1)
                     # print(outputs.shape)
-                    outputs = outputs.reshape(B, num_salient_points, -1)
-                    outputs = outputs.sum(dim=1)
+                    valOutputs = valOutputs.reshape(B, num_salient_points, -1)
+                    valOutputs = valOutputs.sum(dim=1)
                     # print(outputs.shape)
-                    preds = outputs.argmax(dim=1)
+                    valPreds = valOutputs.argmax(dim=1)
                     # print(preds)
                     # return
-                    batch_acc = (preds == label_ids).float().mean().item()
-                    valid_accs.append(batch_acc)
-                    # t2 = time.perf_counter()
+                    val_batch_acc = (valPreds == label_ids).float().mean().item()
+                    valid_accs.append(val_batch_acc)
+                    
+                    testOutputs = model(testInputs) #(B*num_salience_pts, output_dim)
+                    testOutputs = testOutputs.reshape(B, num_salient_points, -1)
+                    testOutputs = testOutputs.sum(dim=1)
+                    testPreds = testOutputs.argmax(dim=1)
+                    test_batch_acc = (testPreds == label_ids).float().mean().item()
+                    test_accs.append(test_batch_acc)
+                    
+                    t2 = time.perf_counter()
                     # print(
-                        # f"load→gpu: {t1 - t0:.3f}s | "
-                        # f"infer: {t2 - t1:.3f}s | "
+                    #     f"load→gpu: {t0 - t3:.3f}s | "
+                    #     f"process: {t1 - t0:.3f}s | "
+                    #     f"infer: {t2 - t1:.3f}s | "
                     # )
-                    # t0 = time.perf_counter()
+                    t3 = time.perf_counter()
                     vpbar.update(B)
                 
             vpbar.close()
@@ -189,34 +230,49 @@ def main(lp = True, dataset_name: str = "salience"):
             valid_mean = np.mean(valid_accs)
             valid_std  = np.std(valid_accs)
             print(f"    Valid Acc = {valid_mean*100:.2f}% ± {valid_std*100:.2f}%")
-
-            # 5) ----- TEST -----
-            correct = total = 0
-            test_accs = []
-            tpbar = tqdm(total=len(test_loader.dataset),
-                        desc=f"Inverted Epoch {epoch}/{total_epochs}",
-                        unit="img")
-            with torch.no_grad():
-                for inputs, labels in test_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
-                    label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
-
-                    # transform input data
-                    B,n,C,H,W = inputs.shape 
-                    inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
-                    outputs = model(inputs) #(B*num_salience_pts, output_dim)
-                    outputs = outputs.reshape(B, num_salient_points, -1)
-                    outputs = outputs.sum(dim=1)
-                    
-                    preds = outputs.argmax(dim=1)
-                    batch_acc = (preds == label_ids).float().mean().item()
-                    test_accs.append(batch_acc)
-                    tpbar.update(B)
-                
-            tpbar.close()
             test_mean = np.mean(test_accs)
             test_std  = np.std(test_accs)
             print(f"    Test  Acc = {test_mean*100:.2f}% ± {test_std*100:.2f}%\n")
+
+            # 5) ----- TEST (inverted) -----
+            # correct = total = 0
+            # test_accs = []
+            # tpbar = tqdm(total=len(test_loader.dataset),
+            #             desc=f"Inverted Epoch {epoch}/{total_epochs}",
+            #             unit="img")
+            # with torch.no_grad():
+            #     for inputs, labels, salience_points in test_loader:
+            #         inputs, labels = inputs.to(device), labels.to(device)
+            #         salience_points = salience_points.to(device)
+            #         label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+
+            #         t0 = time.perf_counter()
+
+            #         B,n,C,H,W = inputs.shape
+            #         inputs = inputs.reshape(-1,C,H,W)
+            #         salience_points = salience_points.reshape(-1,2)
+            #         transformed_imgs = torch.zeros((B*n,C,crop_size,crop_size),device=device)
+
+            #         for i in range(B*n):
+            #             center = salience_points[i]
+            #             transformed_imgs[i] = TF.crop(inputs[i],
+            #                                         top=center[1]-crop_size//2,
+            #                                         left=center[0]-crop_size//2, 
+            #                                         height=crop_size, width=crop_size)
+            #         inputs = testPipeline(transformed_imgs)
+
+
+            #         outputs = model(inputs) #(B*num_salience_pts, output_dim)
+            #         outputs = outputs.reshape(B, num_salient_points, -1)
+            #         outputs = outputs.sum(dim=1)
+                    
+            #         preds = outputs.argmax(dim=1)
+            #         batch_acc = (preds == label_ids).float().mean().item()
+            #         test_accs.append(batch_acc)
+            #         tpbar.update(B)
+                
+            # tpbar.close()
+            
         
             history.append({
                     "epoch":       epoch,
@@ -261,7 +317,7 @@ if __name__ == "__main__":
 
     for i in range(5):
         print(f"starting LP {i}...")
-        main(lp=True, dataset_name="dogs1k") 
+        main(lp=False, dataset_name="dogs1k-v3") 
 
     # for i in range(5):
     #     print(f"starting CNN {i}...")
