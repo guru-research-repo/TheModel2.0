@@ -3,9 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet18, ResNet18_Weights, resnet50
 
-
 class Model(nn.Module):
-    def __init__(self, num_classes=128, pretrained=False, size=180):
+    def __init__(self, num_classes=128, pretrained=False, size=180, T=16.0):
         """
         ResNet18 backbone with two heads:
           • classifier head  → CE loss
@@ -15,14 +14,9 @@ class Model(nn.Module):
 
         # # --------- Backbone feature dim (ResNet18 → 512) ---------
         self.in_size = 512
+        self.temperature = T
+        self.stochastic = False  # training mode without sampling when stochastic=False vs sampling mode when stochastic=True
 
-        # # -------- Backbone feature dim (ResNet50 → 2048) --------
-        # self.in_size = 2048
-
-        # # -------- Backbone extraction -------- ResNet50
-        # weights = ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
-        # base = resnet50(weights=weights)
-        
         # --------- Backbone (feature extractor) --------- ResNet18
         weights = ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
         base = resnet18(weights=weights)
@@ -33,12 +27,8 @@ class Model(nn.Module):
         # --------- Classification head --------- ResNet18
         self.fc1 = nn.Linear(self.in_size, 256)
         self.fc2 = nn.Linear(256, num_classes)
-
-        # # -------- Classification head -------- ResNet50
-        # self.fc1 = nn.Linear(self.in_size, 512)   # bigger input now
-        # self.fc2 = nn.Linear(512, num_classes)
-
-    def forward(self, x):
+    
+    def forward(self, x, return_rep=False):
         """
         Args:
             x : (B, 3, H, W)
@@ -46,9 +36,18 @@ class Model(nn.Module):
         feat_map = self.backbone(x)
         pooled = self.avgpool(feat_map)
         feat = pooled.view(pooled.size(0), -1)  # [B, 512] if resnet18, [B, 2048] if resnet50
+        # logistic units with temperature
+        logits_z = self.fc1(feat)
+        probs = torch.sigmoid(logits_z / self.temperature)
 
-        # classification head
-        x_cls = F.relu(self.fc1(feat))
-        logits = self.fc2(x_cls)
+        # ---------- stochastic vs deterministic ----------
+        if self.stochastic:
+            h = torch.bernoulli(probs)
+        else:
+            h = probs  # deterministic expectation during training
 
-        return logits
+        logits = self.fc2(h)
+        if return_rep:
+            return logits, h, probs # return h for variance analysis
+
+        return logits  

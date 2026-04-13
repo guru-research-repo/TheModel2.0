@@ -1,33 +1,50 @@
-import datetime
 import os
 import pandas as pd
+import datetime
 from utils import *
-from transformation import *
 from model import *
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from Datasets import *
+from trans import Pipeline
 
+"""
+Run the full training experiment for 4-128 identities. 
+main_salience.py tests different numbers of salience points at 32 identities.
 
-def main():
+This function assumes data has already been pretrained.
+"""
+
+def main(lp = True, dataset_name: str = "faces"):
     os.makedirs("output", exist_ok=True)
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
-    dataset_name    = "faces"
+    dataset_name    = dataset_name
     identity_counts = [4, 8, 16, 32, 64, 128]
+    salience_counts = 4
     splits          = ["train", "valid", "test"]
-    total_epochs    = 240
     epoch_block     = 40  # how many epochs per identity
-    idx_gpu         = 0   # The index of GPU that this task is about to run on
-    # num_gpu         = 1
+    total_epochs    = epoch_block * len(identity_counts)
+    num_gpu         = 1
     num_workers     = 4
+    
+    # Hyper‑parameters
+    history         = []
+    batch_size      = 64
+    lr              = 1e-3
+    device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    n_crops         = 4
 
     # ------------------------------------------------------------------------
     # 1) Pre‑load all datasets
     # ------------------------------------------------------------------------
     all_datasets = {
-        ident: { split: load_dataset(dataset_name, ident, split)
+        ident: { split: load_dataset(dataset=dataset_name, 
+                                     identity=ident, 
+                                     task=split, 
+                                     num_salient_points=salience_counts, 
+                                     lp=lp)
                 for split in splits }
         for ident in identity_counts
     }
@@ -43,29 +60,15 @@ def main():
     # 3) Training loop
     # ------------------------------------------------------------------------
 
-    # Hyper‑parameters
-    history         = []
-    batch_size      = 64
-    lr              = 1e-3
-    hidden_neurons  = 100
-    num_iter        = 1
-    dropout         = 0.25
-    # device          = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device(f"cuda:{idx_gpu}" if torch.cuda.is_available() and torch.cuda.device_count() > idx_gpu else "cpu")
-
-    model = Model(hidden_neurons=hidden_neurons, num_iter=num_iter, dropout=dropout)
-    
-    model = model.to(device)
-
-    print(f"→ Model running on {device}")
+    model = Model(size=224) if lp else Model(size=180)
 
  # --- multi‑GPU wrap ---
-    # if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-    #     n_gpu = min(num_gpu, torch.cuda.device_count())
-    #     print(f"→ Using {n_gpu} GPUs")
-    #     model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        n_gpu = min(num_gpu, torch.cuda.device_count())
+        print(f"→ Using {n_gpu} GPUs")
+        model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
 
-    # model = model.to(device)
+    model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.CrossEntropyLoss()
@@ -76,22 +79,22 @@ def main():
 
         # 2) re-create loaders for this identity
         train_loader = DataLoader(
-            all_datasets[ident]["train"],
+            all_datasets["train"],
             batch_size=batch_size,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=True
         )
         valid_loader = DataLoader(
-            all_datasets[ident]["valid"],
-            batch_size=batch_size,
+            all_datasets["valid"],
+            batch_size=batch_size // salience_counts,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True
         )
         test_loader  = DataLoader(
-            all_datasets[ident]["test"],
-            batch_size=batch_size,
+            all_datasets["test"],
+            batch_size=batch_size // salience_counts,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True
@@ -116,9 +119,10 @@ def main():
                 label_ids = labels.argmax(dim=1)
             else:
                 label_ids = labels
-
+                        
             optimizer.zero_grad()
-            outputs = model(inputs)
+            outputs = model(inputs) # (B, output_dim)
+
             loss = criterion(outputs, label_ids)
             loss.backward()
             optimizer.step()
@@ -147,7 +151,17 @@ def main():
             for inputs, labels in valid_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+
+                # weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
+                # transform input data
+                B,n,C,H,W = inputs.shape
+                inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
+
                 outputs = model(inputs)
+                
+                outputs = outputs.reshape(B, salience_counts, -1)
+                outputs = outputs.sum(dim=1)
+                
                 preds = outputs.argmax(dim=1)
                 batch_acc = (preds == label_ids).float().mean().item()
                 valid_accs.append(batch_acc)
@@ -163,7 +177,17 @@ def main():
             for inputs, labels in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 label_ids = labels.argmax(dim=1) if labels.dim()>1 else labels
+
+                # weights = torch.ones((label_ids.shape[0], n_crops)) # all equal for now
+                # transform input data
+                B,n,C,H,W = inputs.shape
+                inputs = inputs.reshape(-1,C,H,W) #(B*num_salience_pts,C,H,W)
+
                 outputs = model(inputs)
+                
+                outputs = outputs.reshape(B, salience_counts, -1)
+                outputs = outputs.sum(dim=1)
+                
                 preds = outputs.argmax(dim=1)
                 batch_acc = (preds == label_ids).float().mean().item()
                 test_accs.append(batch_acc)
@@ -186,9 +210,16 @@ def main():
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     df = pd.DataFrame(history)
-    df.to_csv(f"output/training_history_{ts}.csv", index=False)
+    df.to_csv(f"output/training_history_{'lp' if lp else 'cnn'}_{ts}.csv", index=False)
 
-    torch.save(model.state_dict(), f"output/resnet18_{ts}.pth")
+    torch.save(model.state_dict(), f"output/resnet18_{'lp' if lp else 'cnn'}_{ts}.pth")
 
 if __name__ == "__main__":
-    main()
+    # main(lp=True)
+    for i in range(5):
+        print(f"starting LP {i}...")
+        main(lp=True, dataset_name="salience")
+
+    for i in range(5):
+        print(f"starting CNN {i}...")
+        main(lp=False, dataset_name="salience")

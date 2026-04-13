@@ -21,13 +21,11 @@ def load_dataset(dataset, identity=4, task="train", num_salient_points=4, lp = T
     return ds
 
 # Used only for salience training
-def make_datasets(ident, num_salient_points, lp = True, dataset="salience", label_map=None):
+def make_datasets(ident, num_salient_points, lp = False, dataset="salience"):
     root = f"processed_data/salience128-48lp-mag/updated_faces" if lp else f"processed_data/salience128-48lp-mag/cnn_faces"
-    # root = f"dogs_processed_data/salience10-48lp-mag/updated_dogs" if lp else f"dogs_processed_data/salience10-48lp-mag/cnn_dogs"
-    # "n02097203_30_2097203_proc3.png"
 
     return {
-        "train": SalienceDatasetBatched (
+        "train": SalienceDatasetBatched(
             root_dir=root,
             num_identities=ident,
             split="train",
@@ -231,7 +229,7 @@ class SalienceShuffledDataset(Dataset):
 
 class SalienceDataset(Dataset):
     def __init__(self, root_dir: str, num_identities: int, split: str,
-                 num_salient_points: int = 4, label_map=None):
+                 num_salient_points: int = 4):
         """
         Args:
             root_dir (str): base path, e.g. "processed_data/salience/updated_faces"
@@ -252,13 +250,7 @@ class SalienceDataset(Dataset):
             if os.path.isdir(os.path.join(self.data_dir, d))
         )
 
-        # if label_map is None:
-        #     raise ValueError("Global label_map must be provided!")
-        
-        # self.map = label_map
-        # self.classes = self.classes[:num_identities]
-
-        self.map = get_label_mapping(type="updated_faces")
+        self.map = get_label_mapping(type="cnn_faces")
 
         # Collect base images and all their processed variants
         self.samples = []  # [(base_img_id, [proc_paths...], label), ...]
@@ -318,15 +310,7 @@ class SalienceDatasetBatched(Dataset):
             if os.path.isdir(os.path.join(self.data_dir, d))
         )
 
-        # only take first num_identities identities
-        # self.classes = self.classes[:num_identities]
-
-        self.map = get_label_mapping(type="updated_faces")
-        # if label_map is None:
-        #     raise ValueError("Global label_map must be provided!")
-        
-        # self.map = label_map
-
+        self.map = get_label_mapping(type="cnn_faces")
 
         # Collect base images and all their processed variants
         self.samples = []  # [(path, label), ...]
@@ -336,7 +320,7 @@ class SalienceDatasetBatched(Dataset):
 
             for fname in os.listdir(ident_dir):
                 for i in range(num_salient_points):
-                    if fname.endswith(f"proc{i}.png"): # "procX.png" or "procXX.png"
+                    if fname.endswith(f'c{i}.png'): # "procX.png" or "procXX.png"
                         self.samples.append((os.path.join(ident_dir, fname), ident))
 
 
@@ -345,10 +329,7 @@ class SalienceDatasetBatched(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.samples[idx]
-        # print("PATH IN TRAIN", path)
-        # print("LABEL IN TRAIN", label)
         img = TF.to_tensor(Image.open(path).convert("RGB"))
 
         label = label_to_one_hot(label, self.map)
-        # print("LABEL IN TRAIN", label)
         return img, label

@@ -77,9 +77,7 @@ def show_images(imgs: list[torch.Tensor], cols=3, figsize=None):
     plt.tight_layout()
     plt.show()
 
-
-
-def get_label_mapping(root_dir="processed_data/salience10-48lp-mag", num_identities=4, split="test", type="updated_faces"):
+def get_label_mapping(root_dir="processed_data/salience128-48lp-mag", num_identities=128, split="test", type="cnn_faces"):
     """
     Scan "<root_dir>/{type}/{type}/{num_identities}_identities/{split}"
     and return a dict mapping each class-name (folder name) to a unique index.
@@ -122,12 +120,7 @@ def label_to_one_hot(label, mapping):
         torch.FloatTensor of shape (num_classes,), e.g. [0,0,1,0,…]
     """
     idx = mapping[label]
-    # print("label in utils", label)
     num_classes = len(mapping)
-    # print("idx from mapping in utils.py", idx)
-    # print("num_classes in utils", num_classes)
-    # print("utils.py",F.one_hot(torch.tensor(idx, dtype=torch.long),
-                     # num_classes=num_classes).float())
     # create one-hot and cast to float
     return F.one_hot(torch.tensor(idx, dtype=torch.long),
                      num_classes=num_classes).float()

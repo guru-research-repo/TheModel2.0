@@ -1,12 +1,14 @@
+# %%
 import pandas as pd
 import matplotlib.pyplot as plt
 
 # Ensure numeric types
-df = pd.read_csv('output/training_history.csv').apply(pd.to_numeric, errors='coerce')
+df = pd.read_csv('output/training_history_20250514_203140.csv').apply(pd.to_numeric, errors='coerce')
 
 # Extract data
 epochs = df['epoch'].values
-train = df['train_acc'].values
+train = df['train_mean'].values
+train_std = df['train_std'].values
 valid = df['valid_mean'].values
 valid_std = df['valid_std'].values
 test = df['test_mean'].values
@@ -20,6 +22,8 @@ ax.plot(epochs, valid, label='Valid', color='tab:orange')
 ax.plot(epochs, test, label='Test', color='tab:green')
 
 # Shade ±1 std deviation
+ax.fill_between(epochs, train - train_std, train + train_std,
+                color='tab:blue', alpha=0.2)
 ax.fill_between(epochs, valid - valid_std, valid + valid_std,
                 color='tab:orange', alpha=0.2)
 ax.fill_between(epochs, test - test_std, test + test_std,
@@ -33,3 +37,4 @@ ax.legend()
 ax.grid(True)
 
 plt.show()
+# %%
